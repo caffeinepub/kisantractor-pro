@@ -2,9 +2,11 @@ import {
   ArrowLeftRight,
   BarChart2,
   Bell,
+  Check,
   IndianRupee,
   LayoutDashboard,
   Menu,
+  Pencil,
   Receipt,
   Settings,
   Tractor,
@@ -129,6 +131,11 @@ export default function App() {
   const [invoiceBooking, setInvoiceBooking] = useState<Booking | null>(null);
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [businessName, setBusinessName] = useState<string>(
+    () => localStorage.getItem("businessName") || "KisanTractor Pro",
+  );
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(businessName);
 
   useEffect(() => {
     if (darkMode) {
@@ -193,7 +200,7 @@ export default function App() {
 
   const showActionBar = mainScreens.includes(screen);
 
-  const getScreenTitle = () => {
+  const _getScreenTitle = () => {
     switch (screen) {
       case "dashboard":
         return t.appName;
@@ -297,9 +304,58 @@ export default function App() {
               >
                 <Menu size={22} className="text-foreground" />
               </button>
-              <span className="font-bold text-foreground text-base">
-                {getScreenTitle()}
-              </span>
+              {editingName ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const trimmed = nameInput.trim() || "KisanTractor Pro";
+                        setBusinessName(trimmed);
+                        setNameInput(trimmed);
+                        localStorage.setItem("businessName", trimmed);
+                        setEditingName(false);
+                      }
+                      if (e.key === "Escape") {
+                        setNameInput(businessName);
+                        setEditingName(false);
+                      }
+                    }}
+                    className="font-bold text-foreground text-base bg-transparent border-b-2 border-primary outline-none w-40 max-w-[50vw]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = nameInput.trim() || "KisanTractor Pro";
+                      setBusinessName(trimmed);
+                      setNameInput(trimmed);
+                      localStorage.setItem("businessName", trimmed);
+                      setEditingName(false);
+                    }}
+                    className="p-1 rounded text-primary"
+                  >
+                    <Check size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNameInput(businessName);
+                    setEditingName(true);
+                  }}
+                  className="flex items-center gap-1 group"
+                >
+                  <span className="font-bold text-foreground text-base">
+                    {businessName}
+                  </span>
+                  <Pencil
+                    size={13}
+                    className="text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity"
+                  />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button
