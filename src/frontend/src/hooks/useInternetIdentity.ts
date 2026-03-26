@@ -62,7 +62,7 @@ async function createAuthClient(
     },
     ...createOptions,
   };
-  return AuthClient.create(options);
+  return await AuthClient.create(options);
 }
 
 function assertProviderPresent(
@@ -88,14 +88,8 @@ export function InternetIdentityProvider({
   children: ReactNode;
   createOptions?: AuthClientCreateOptions;
 }>) {
-  // Refs for values needed inside init effect without causing re-runs
   const authClientRef = useRef<AuthClient | undefined>(undefined);
   const createOptionsRef = useRef(createOptions);
-  createOptionsRef.current = createOptions;
-
-  const [authClient, setAuthClient] = useState<AuthClient | undefined>(
-    undefined,
-  );
   const [identity, setIdentity] = useState<Identity | undefined>(undefined);
   const [loginStatus, setStatus] = useState<Status>("initializing");
   const [loginError, setError] = useState<Error | undefined>(undefined);
@@ -123,9 +117,10 @@ export function InternetIdentityProvider({
   );
 
   const login = useCallback(() => {
+    const authClient = authClientRef.current;
     if (!authClient) {
       setErrorMessage(
-        "AuthClient is not initialized yet, make sure to call `login` on user interaction e.g. click.",
+        "AuthClient is not initialized yet, make sure to call login on user interaction e.g. click.",
       );
       return;
     }
@@ -149,9 +144,10 @@ export function InternetIdentityProvider({
 
     setStatus("logging-in");
     void authClient.login(options);
-  }, [authClient, handleLoginError, handleLoginSuccess, setErrorMessage]);
+  }, [handleLoginError, handleLoginSuccess, setErrorMessage]);
 
   const clear = useCallback(() => {
+    const authClient = authClientRef.current;
     if (!authClient) {
       setErrorMessage("Auth client not initialized");
       return;
@@ -162,7 +158,6 @@ export function InternetIdentityProvider({
       .then(() => {
         setIdentity(undefined);
         authClientRef.current = undefined;
-        setAuthClient(undefined);
         setStatus("idle");
         setError(undefined);
       })
@@ -174,25 +169,20 @@ export function InternetIdentityProvider({
             : new Error("Logout failed"),
         );
       });
-  }, [authClient, setErrorMessage]);
+  }, [setErrorMessage]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount; createOptionsRef is stable
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         setStatus("initializing");
-        if (!authClientRef.current) {
-          authClientRef.current = await createAuthClient(
-            createOptionsRef.current,
-          );
-        }
+        const existingClient = await createAuthClient(createOptionsRef.current);
         if (cancelled) return;
-        setAuthClient(authClientRef.current);
-        const isAuthenticated = await authClientRef.current.isAuthenticated();
+        authClientRef.current = existingClient;
+        const isAuthenticated = await existingClient.isAuthenticated();
         if (cancelled) return;
         if (isAuthenticated) {
-          const loadedIdentity = authClientRef.current.getIdentity();
+          const loadedIdentity = existingClient.getIdentity();
           setIdentity(loadedIdentity);
         }
       } catch (unknownError) {
@@ -211,6 +201,7 @@ export function InternetIdentityProvider({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const value = useMemo<ProviderValue>(
