@@ -99,11 +99,15 @@ actor {
     udharBalance : Float;
   };
 
+  // Settings returned to frontend (full type)
   type Settings = {
     hourlyRate : Float;
     acreRate : Float;
     language : Text;
     darkMode : Bool;
+    services : [Text];
+    serviceRates : Text;
+    ownerPassword : Text;
   };
 
   type MonthlyReport = {
@@ -176,12 +180,19 @@ actor {
   let maintenanceReminders = Map.empty<Nat, MaintenanceReminder>();
   let creditRecords = Map.empty<Nat, CreditRecord>();
   let parties = Map.empty<Nat, Party>();
-  var settings : Settings = {
+
+  // Keep old settings stable var with original type to avoid compatibility error
+  var settings : { hourlyRate : Float; acreRate : Float; language : Text; darkMode : Bool } = {
     hourlyRate = 0.0;
     acreRate = 0.0;
-    language = "hindi";
+    language = "gu";
     darkMode = false;
   };
+
+  // New settings fields stored as separate stable variables
+  var settingsServices : [Text] = ["Ploughing", "Harvesting", "Threshing", "Other"];
+  var settingsServiceRates : Text = "{}";
+  var settingsOwnerPassword : Text = "1234";
 
   var nextBookingId = 1;
   var nextTractorId = 1;
@@ -447,12 +458,29 @@ actor {
     { totalEarnings; totalJobs; udharBalance };
   };
 
+  // Settings: split across old `settings` var + new separate vars to avoid upgrade compatibility error
   public shared ({ caller }) func updateSettings(newSettings : Settings) : async () {
-    settings := newSettings;
+    settings := {
+      hourlyRate = newSettings.hourlyRate;
+      acreRate = newSettings.acreRate;
+      language = newSettings.language;
+      darkMode = newSettings.darkMode;
+    };
+    settingsServices := newSettings.services;
+    settingsServiceRates := newSettings.serviceRates;
+    settingsOwnerPassword := newSettings.ownerPassword;
   };
 
   public query ({ caller }) func getSettings() : async Settings {
-    settings;
+    {
+      hourlyRate = settings.hourlyRate;
+      acreRate = settings.acreRate;
+      language = settings.language;
+      darkMode = settings.darkMode;
+      services = settingsServices;
+      serviceRates = settingsServiceRates;
+      ownerPassword = settingsOwnerPassword;
+    };
   };
 
   // Query Functions

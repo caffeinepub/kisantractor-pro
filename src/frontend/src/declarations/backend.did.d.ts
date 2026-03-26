@@ -97,6 +97,9 @@ export interface Settings {
   'language' : string,
   'darkMode' : boolean,
   'acreRate' : number,
+  'services' : Array<string>,
+  'serviceRates' : string,
+  'ownerPassword' : string,
 }
 export interface Tractor {
   'id' : bigint,
@@ -147,7 +150,7 @@ export interface _SERVICE {
   'getSettings' : ActorMethod<[], Settings>,
   'getTodayEarnings' : ActorMethod<[bigint], number>,
   'getTractor' : ActorMethod<[bigint], Tractor>,
-  'getTractorBookings' : ActorMethod<[bigint], Array<Booking>>,
+  'getTractorBookings' : ActorMethod<[bigint], Array<Tractor>>,
   'getUpcomingReminders' : ActorMethod<[bigint], Array<MaintenanceReminder>>,
   'updateBooking' : ActorMethod<[bigint, Booking], undefined>,
   'updateCreditRecord' : ActorMethod<[bigint, CreditRecord], undefined>,

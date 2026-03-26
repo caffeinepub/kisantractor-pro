@@ -87,6 +87,15 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
     .filter((b) => b.paymentMode === "upi")
     .reduce((s, b) => s + b.finalAmount, 0);
 
+  // Overall (all-time) cash vs UPI
+  const totalCash = bookings
+    .filter((b) => b.paymentMode === "cash")
+    .reduce((s, b) => s + b.finalAmount, 0);
+
+  const totalUPI = bookings
+    .filter((b) => b.paymentMode === "upi")
+    .reduce((s, b) => s + b.finalAmount, 0);
+
   const statusColor = (status: string) => {
     if (status === "completed") return "bg-accent text-accent-foreground";
     if (status === "ongoing")
@@ -225,6 +234,38 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
             </div>
             <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
               ₹{todayUPI.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Total Cash (All-time) */}
+          <div
+            className="bg-card rounded-xl shadow-card border border-border p-4 flex flex-col gap-2"
+            style={{ minWidth: 140 }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="text-base leading-none">🏦</span>
+              <span className="text-xs text-muted-foreground font-medium">
+                {language === "gu" ? "કુલ Cash" : "Kul Cash Aaya"}
+              </span>
+            </div>
+            <p className="text-xl font-bold text-green-700 dark:text-green-300">
+              ₹{totalCash.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Total UPI (All-time) */}
+          <div
+            className="bg-card rounded-xl shadow-card border border-border p-4 flex flex-col gap-2"
+            style={{ minWidth: 140 }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="text-base leading-none">💳</span>
+              <span className="text-xs text-muted-foreground font-medium">
+                {language === "gu" ? "કુલ UPI" : "Kul UPI Aaya"}
+              </span>
+            </div>
+            <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">
+              ₹{totalUPI.toLocaleString()}
             </p>
           </div>
         </div>

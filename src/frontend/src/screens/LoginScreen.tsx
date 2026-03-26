@@ -4,10 +4,9 @@ import { useAppStore } from "../store";
 
 interface Props {
   onOwnerLogin: () => void;
-  onDriverLogin: () => void;
 }
 
-export default function LoginScreen({ onOwnerLogin, onDriverLogin }: Props) {
+export default function LoginScreen({ onOwnerLogin }: Props) {
   const { language } = useAppStore();
   const t = translations[language];
 
@@ -32,7 +31,7 @@ export default function LoginScreen({ onOwnerLogin, onDriverLogin }: Props) {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
-        className="w-full max-w-sm space-y-4"
+        className="w-full max-w-sm"
       >
         <button
           type="button"
@@ -42,16 +41,6 @@ export default function LoginScreen({ onOwnerLogin, onDriverLogin }: Props) {
         >
           <span className="text-2xl">👑</span>
           {t.ownerLogin}
-        </button>
-
-        <button
-          type="button"
-          onClick={onDriverLogin}
-          data-ocid="login.driver_login.button"
-          className="w-full py-5 rounded-2xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-xl font-bold shadow-lg flex items-center justify-center gap-3 transition-colors"
-        >
-          <span className="text-2xl">🚜</span>
-          {t.driverLogin}
         </button>
       </motion.div>
 
