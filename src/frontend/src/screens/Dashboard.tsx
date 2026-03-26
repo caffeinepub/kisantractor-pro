@@ -27,6 +27,12 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
   const [tractors, setTractors] = useState<Tractor[]>([]);
   const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -122,7 +128,11 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
     <div className="pb-4">
       {/* Greeting */}
       <div className="px-4 pt-4 pb-2">
-        <p className="text-xl font-bold text-foreground">{t.namaste}</p>
+        <p className="text-xl font-bold text-foreground">
+          {currentTime.toLocaleTimeString(
+            language === "gu" ? "gu-IN" : "en-IN",
+          )}
+        </p>
         <p className="text-sm text-muted-foreground">
           {new Date().toLocaleDateString(
             language === "gu" ? "gu-IN" : "en-IN",
