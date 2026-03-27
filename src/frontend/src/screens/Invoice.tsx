@@ -156,17 +156,29 @@ export default function Invoice({ booking: b, onBack }: Props) {
         </div>
       </div>
 
-      {/* WhatsApp Share */}
-      <a
-        href={`https://wa.me/${b.mobile}?text=${encodeURIComponent(
-          `${t.invoice} #${String(b.id).padStart(4, "0")}\n${b.customerName}\n${t.finalAmount}: \u20b9${b.finalAmount}\n${t.balanceDue}: \u20b9${b.balanceDue}`,
-        )}`}
-        target="_blank"
-        rel="noreferrer"
-        className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl print-hidden"
-      >
-        💬 {t.share} WhatsApp
-      </a>
+      {/* Share Buttons */}
+      <div className="flex gap-2 print-hidden">
+        <a
+          href={`https://wa.me/${b.mobile}?text=${encodeURIComponent(
+            `${t.invoice} #${String(b.id).padStart(4, "0")}\n${b.customerName}\n${t.finalAmount}: \u20b9${b.finalAmount}\n${t.balanceDue}: \u20b9${b.balanceDue}`,
+          )}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl"
+        >
+          💬 WhatsApp
+        </a>
+        {b.mobile && (
+          <a
+            href={`sms:+91${b.mobile}?body=${encodeURIComponent(
+              `${t.invoice} #${String(b.id).padStart(4, "0")}\n${b.customerName}\n${t.finalAmount}: \u20b9${b.finalAmount}\n${t.balanceDue}: \u20b9${b.balanceDue}`,
+            )}`}
+            className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl"
+          >
+            📱 SMS
+          </a>
+        )}
+      </div>
     </div>
   );
 }

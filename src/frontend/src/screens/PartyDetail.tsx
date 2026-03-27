@@ -210,6 +210,42 @@ export default function PartyDetail({ party, onBack }: Props) {
             </div>
           )}
 
+          {/* Reminder Card */}
+          {party.phone && stats && stats.udharBalance > 0 && (
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-xl p-3">
+              <p className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
+                {language === "gu" ? "ચૂકવણી રિમાઇન્ડર" : "Payment Reminder"}
+              </p>
+              <p className="text-xs text-orange-700 dark:text-orange-400 mb-3">
+                {language === "gu"
+                  ? `બાકી: ₹${stats.udharBalance.toLocaleString()}`
+                  : `Pending: ₹${stats.udharBalance.toLocaleString()}`}
+              </p>
+              <div className="flex gap-2">
+                <a
+                  href={`https://wa.me/91${party.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                    `Namaskar ${party.name}! Aapka pending balance ₹${stats.udharBalance} hai. Kirpaya jald payment karein. - KisanTractor`,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-ocid="party_detail.whatsapp_reminder.button"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg"
+                >
+                  💬 WhatsApp
+                </a>
+                <a
+                  href={`sms:+91${party.phone.replace(/\D/g, "")}?body=${encodeURIComponent(
+                    `Namaskar ${party.name}! Aapka pending balance ₹${stats.udharBalance} hai. Kirpaya jald payment karein. - KisanTractor`,
+                  )}`}
+                  data-ocid="party_detail.sms_reminder.button"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg"
+                >
+                  📱 SMS
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Booking History */}
           <div>
             <div className="flex items-center gap-2 mb-3">

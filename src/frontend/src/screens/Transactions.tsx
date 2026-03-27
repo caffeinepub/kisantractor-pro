@@ -1,4 +1,11 @@
-import { CheckCircle, Clock, Pencil, Share2, Trash2 } from "lucide-react";
+import {
+  CheckCircle,
+  Clock,
+  MessageSquare,
+  Pencil,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Booking } from "../backend.d";
 import { useActor } from "../hooks/useActor";
@@ -60,6 +67,24 @@ function shareOnWhatsApp(tx: TxEntry) {
     ? `https://wa.me/91${phone}?text=${encodeURIComponent(lines)}`
     : `https://wa.me/?text=${encodeURIComponent(lines)}`;
   window.open(url, "_blank");
+}
+
+function shareViaSMS(tx: TxEntry) {
+  const phone = tx.mobile ? tx.mobile.replace(/\D/g, "") : "";
+  if (!phone) return;
+  const typeLabel = tx.type === "advance" ? "Advance" : "Balance (Baki)";
+  const lines = [
+    "🚜 KisanTractor Pro - Invoice",
+    `Party: ${tx.customerName}`,
+    `Service: ${tx.workType}`,
+    `Date: ${tx.dateStr}`,
+    `Type: ${typeLabel}`,
+    `Amount: ₹${tx.amount}`,
+    tx.discount > 0 ? `Discount: ₹${tx.discount}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  window.open(`sms:+91${phone}?body=${encodeURIComponent(lines)}`);
 }
 
 function PaymentModeBadge({ mode }: { mode: string }) {
@@ -366,6 +391,17 @@ export default function Transactions({
                     >
                       <Share2 size={13} />
                     </button>
+                    {tx.mobile && (
+                      <button
+                        type="button"
+                        onClick={() => shareViaSMS(tx)}
+                        data-ocid={`transactions.sms_button.${idx + 1}`}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                        title="SMS par share karo"
+                      >
+                        <MessageSquare size={13} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => startEdit(tx)}
