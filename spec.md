@@ -1,22 +1,31 @@
 # KisanTractor Pro
 
 ## Current State
-- Dashboard has summary cards: Today's Earnings, This Month, Pending Udhar, Active Tractors
-- Transactions list shows payment mode inline as plain text (e.g. `WORKTYPE • CASH • DATE`) in subtitle
-- Every Booking record already stores `paymentMode: "cash" | "upi"`
-- Both NewTransaction and PaymentIn forms already have Cash/UPI toggle buttons
+- Invoice screen (Invoice.tsx) shows transaction details with WhatsApp share and a print button via window.print()
+- Invoice shows a tractor emoji and app name but no business logo or editable business name
+- Business name stored in localStorage (key: businessName), shown in App.tsx header
+- No monthly statement feature exists
+- Settings has no business logo upload option
+- PartyDetail.tsx shows party transaction history but no PDF/download option
 
 ## Requested Changes (Diff)
 
 ### Add
-- Dashboard: Two new summary cards — "Aaj Cash Aaya" and "Aaj UPI Aaya" showing today's cash and UPI totals separately (computed client-side from bookings filtered by today's date + paymentMode)
+- PDF Download button on Invoice screen -- uses browser print-to-PDF via window.print() with clean print CSS
+- Monthly Statement screen -- new component for a party showing all transactions for a selected month, with download PDF and WhatsApp share buttons
+- Business logo on Invoice -- Settings gets a logo upload section (stored as base64 in localStorage key businessLogo); Invoice shows logo above business name
+- Business name on Invoice -- read businessName from localStorage instead of hardcoded app name
 
 ### Modify
-- Transactions list: Make payment mode more visually prominent — replace plain text with a colored badge/pill (green for Cash 💵, blue for UPI 📱) so it's immediately visible per transaction
+- Invoice.tsx -- add logo display, use businessName from localStorage, improve print CSS, rename print button to PDF Download
+- Settings.tsx -- add Business Logo section with file input, preview, remove button; save as base64 to localStorage key businessLogo
+- PartyDetail.tsx -- add Monthly Statement button that shows the monthly statement view
 
 ### Remove
-- Nothing removed
+- Nothing
 
 ## Implementation Plan
-1. **Dashboard.tsx**: Compute `todayCash` and `todayUPI` from `bookings` filtered by today's date — sum `finalAmount` where `paymentMode === "cash"` and `paymentMode === "upi"` respectively. Add two new scrollable summary cards after existing cards.
-2. **Transactions.tsx**: Replace `{tx.mode.toUpperCase()}` plain text in subtitle with a styled inline badge — green pill for Cash, blue pill for UPI.
+1. Settings.tsx: Add business logo section with file input (accept image/*), base64 storage, preview and remove
+2. Invoice.tsx: Read businessName and businessLogo from localStorage, show logo in header, add clean print/PDF CSS via style tag, update button label to PDF Download
+3. MonthlyStatement.tsx (new): Month selector (default current month), filtered bookings for selected party+month, table with Date/Service/Type/Amount/Mode columns, totals, PDF download (window.print()) and WhatsApp share buttons, clean @media print styles
+4. PartyDetail.tsx: Add Monthly Statement button, show MonthlyStatement component as inline sub-view via state

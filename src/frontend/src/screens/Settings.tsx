@@ -1,5 +1,12 @@
-import { ArrowLeft, ChevronDown, ChevronUp, LogOut, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  LogOut,
+  Users,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useActor } from "../hooks/useActor";
 import type { Language } from "../i18n";
 import { translations } from "../i18n";
@@ -42,6 +49,12 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
   const [newService, setNewService] = useState("");
   const [expandedService, setExpandedService] = useState<string | null>(null);
 
+  // Business logo state
+  const [businessLogo, setBusinessLogo] = useState<string | null>(
+    localStorage.getItem("businessLogo") || null,
+  );
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!actor) return;
     actor.getSettings().then((s) => {
@@ -58,6 +71,24 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
         ),
       );
   }, [actor, setLanguage, setDarkMode]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      localStorage.setItem("businessLogo", base64);
+      setBusinessLogo(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    localStorage.removeItem("businessLogo");
+    setBusinessLogo(null);
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  };
 
   const saveSettings = async () => {
     if (!actor) return;
@@ -161,6 +192,61 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">
           {t.settings}
         </h1>
+      </div>
+
+      {/* Business Logo */}
+      <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-3">
+        <h2 className="font-bold text-gray-800 dark:text-white">
+          {language === "gu" ? "બિઝનેસ લોગો" : "Business Logo"}
+        </h2>
+        {businessLogo && (
+          <div className="flex items-center gap-3">
+            <img
+              src={businessLogo}
+              alt="Business Logo"
+              className="rounded-lg border border-gray-200 dark:border-gray-600"
+              style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain" }}
+            />
+            <button
+              type="button"
+              onClick={handleRemoveLogo}
+              data-ocid="settings.logo.delete_button"
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-semibold hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors"
+            >
+              <X size={14} />
+              {language === "gu" ? "દૂર કરો" : "Remove"}
+            </button>
+          </div>
+        )}
+        <div>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoUpload}
+            data-ocid="settings.logo.upload_button"
+            className="hidden"
+            id="logo-upload"
+          />
+          <label
+            htmlFor="logo-upload"
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/30 border-2 border-dashed border-green-400 dark:border-green-700 text-green-700 dark:text-green-400 font-semibold text-sm cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors w-full justify-center"
+          >
+            📷{" "}
+            {businessLogo
+              ? language === "gu"
+                ? "લોગો બદલો"
+                : "Change Logo"
+              : language === "gu"
+                ? "લોગો અપલોડ કરો"
+                : "Upload Logo"}
+          </label>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          {language === "gu"
+            ? "ઇન્વૉઇસ અને સ્ટેટમેન્ટ પર દેખાશે"
+            : "Will appear on invoices and statements"}
+        </p>
       </div>
 
       {/* Language */}
