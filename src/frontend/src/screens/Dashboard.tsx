@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Screen } from "../App";
-import type { Booking, MaintenanceReminder, Tractor } from "../backend.d";
+import type {
+  Booking,
+  CreditRecord,
+  MaintenanceReminder,
+  Tractor,
+} from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
@@ -39,12 +44,13 @@ function LiveClock({ language }: { language: string }) {
 
 export default function Dashboard({ onBookingTap, onNavigate }: Props) {
   const { actor } = useActor();
-  const { language } = useAppStore();
+  const { language, services } = useAppStore();
   const t = translations[language];
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [tractors, setTractors] = useState<Tractor[]>([]);
   const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
+  const [pendingCredits, setPendingCredits] = useState<CreditRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const todayStart = new Date();
@@ -54,17 +60,21 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
   const load = useCallback(async () => {
     if (!actor) return;
     try {
-      const [allBookings, earnings, allTractors, upcomingRem] =
+      const [allBookings, earnings, allTractors, upcomingRem, credits] =
         await Promise.all([
           actor.getAllBookings(),
           actor.getTodayEarnings(BigInt(todayTs)),
           actor.getAllTractors(),
           actor.getUpcomingReminders(BigInt(Date.now())),
+          actor.getPendingCredits(),
         ]);
       setBookings(allBookings);
       setTodayEarnings(earnings);
       setTractors(allTractors);
       setReminders(upcomingRem.slice(0, 3));
+      setPendingCredits(
+        credits.filter((c) => c.totalDue - c.amountPaid > 0).slice(0, 5),
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -310,18 +320,90 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
         </div>
       )}
 
-      {/* Today's Jobs */}
-      <div className="mx-4 mt-4">
+      {/* ---- VERTICAL SECTIONS ---- */}
+
+      {/* 1. Party Due Payments (Pending Udhar) */}
+      <div className="mx-4 mt-5">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-bold text-foreground">{t.todayJobs}</h2>
+          <h2 className="text-base font-bold text-foreground">
+            {language === "gu" ? "💰 પેન્ડિંગ ઉધાર" : "💰 Pending Due Payments"}
+          </h2>
+          <button
+            type="button"
+            onClick={() => onNavigate("credits")}
+            className="text-xs text-primary font-semibold"
+          >
+            {language === "gu" ? "બધું જુઓ" : "View All"}
+          </button>
+        </div>
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          {pendingCredits.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {language === "gu"
+                  ? "કોઈ પેન્ડિંગ ઉધાર નથી"
+                  : "No pending due payments"}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {pendingCredits.map((c) => {
+                const due = c.totalDue - c.amountPaid;
+                return (
+                  <div
+                    key={Number(c.id)}
+                    className="flex items-center justify-between px-4 py-3"
+                  >
+                    <div className="flex-1">
+                      <p className="font-bold text-foreground text-sm">
+                        {c.customerName}
+                      </p>
+                      {c.mobile ? (
+                        <p className="text-xs text-muted-foreground">
+                          {c.mobile}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold text-destructive">
+                        ₹{due.toLocaleString()}
+                      </span>
+                      {c.mobile ? (
+                        <a
+                          href={`tel:${c.mobile}`}
+                          className="flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full"
+                        >
+                          <PhoneCall size={10} />
+                          {t.call}
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Today's Work */}
+      <div className="mx-4 mt-5">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-base font-bold text-foreground">
+            {language === "gu" ? "🚜 આજનું કામ" : "🚜 Today's Work"}
+          </h2>
+          <button
+            type="button"
+            onClick={() => onNavigate("bookings")}
+            className="text-xs text-primary font-semibold"
+          >
+            {language === "gu" ? "બધું જુઓ" : "View All"}
+          </button>
         </div>
 
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           {todayBookings.length === 0 ? (
-            <div
-              className="py-10 text-center"
-              data-ocid="dashboard.empty_state"
-            >
+            <div className="py-8 text-center" data-ocid="dashboard.empty_state">
               <p className="text-sm text-muted-foreground">{t.noBookings}</p>
             </div>
           ) : (
@@ -341,7 +423,7 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
                       {b.customerName}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {b.village} • {b.workType}
+                      {b.workType}
                     </p>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block font-medium ${statusColor(b.status)}`}
@@ -368,56 +450,41 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="mx-4 mt-4">
-        <h2 className="text-base font-bold text-foreground mb-3">
-          {t.quickActions}
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
+      {/* 3. Services */}
+      <div className="mx-4 mt-5">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-base font-bold text-foreground">
+            {language === "gu" ? "⚙️ સેવાઓ" : "⚙️ Services"}
+          </h2>
           <button
             type="button"
-            onClick={() => onNavigate("expenses")}
-            className="flex flex-col items-center justify-center gap-1.5 border border-border rounded-xl p-4 hover:bg-muted transition-colors"
-            data-ocid="dashboard.expenses.button"
+            onClick={() => onNavigate("settings")}
+            className="text-xs text-primary font-semibold"
           >
-            <span className="text-2xl">💸</span>
-            <span className="text-xs font-semibold text-foreground">
-              {t.addExpense}
-            </span>
+            {language === "gu" ? "મેનેજ કરો" : "Manage"}
           </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("parties")}
-            className="flex flex-col items-center justify-center gap-1.5 border border-border rounded-xl p-4 hover:bg-muted transition-colors"
-            data-ocid="dashboard.parties.button"
-          >
-            <span className="text-2xl">👥</span>
-            <span className="text-xs font-semibold text-foreground">
-              {t.parties}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("reports")}
-            className="flex flex-col items-center justify-center gap-1.5 border border-border rounded-xl p-4 hover:bg-muted transition-colors"
-            data-ocid="dashboard.reports.button"
-          >
-            <span className="text-2xl">📊</span>
-            <span className="text-xs font-semibold text-foreground">
-              {t.reports}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("credits")}
-            className="flex flex-col items-center justify-center gap-1.5 border border-border rounded-xl p-4 hover:bg-muted transition-colors"
-            data-ocid="dashboard.credits.button"
-          >
-            <span className="text-2xl">🤝</span>
-            <span className="text-xs font-semibold text-foreground">
-              {t.udhar}
-            </span>
-          </button>
+        </div>
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          {services.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {language === "gu"
+                  ? "કોઈ સેવા ઉમેરવામાં નથી"
+                  : "No services added yet"}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {services.map((svc) => (
+                <div key={svc} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-lg">🔧</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {svc}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
