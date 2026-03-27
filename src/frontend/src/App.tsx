@@ -33,6 +33,7 @@ import Parties from "./screens/Parties";
 import PartyDetail from "./screens/PartyDetail";
 import PaymentIn from "./screens/PaymentIn";
 import Reports from "./screens/Reports";
+import ServiceManagement from "./screens/ServiceManagement";
 import SettingsScreen from "./screens/Settings";
 import TractorScreen from "./screens/Tractors";
 import Transactions from "./screens/Transactions";
@@ -49,6 +50,7 @@ export type Screen =
   | "reports"
   | "credits"
   | "settings"
+  | "serviceManagement"
   | "invoice"
   | "parties"
   | "partyDetail"
@@ -82,6 +84,12 @@ const drawerNavItems = [
     icon: Tractor,
   },
   {
+    id: "drivers" as Screen,
+    label_en: "Drivers",
+    label_gu: "ડ્રાઇવર",
+    icon: Users,
+  },
+  {
     id: "expenses" as Screen,
     label_en: "Expenses",
     label_gu: "ખર્ચ",
@@ -98,12 +106,6 @@ const drawerNavItems = [
     label_en: "Udhar",
     label_gu: "ઉધાર",
     icon: IndianRupee,
-  },
-  {
-    id: "settings" as Screen,
-    label_en: "Settings",
-    label_gu: "સેટિંગ",
-    icon: Settings,
   },
 ];
 
@@ -126,6 +128,7 @@ const screenTitles: Record<Screen, { en: string; gu: string }> = {
   invoice: { en: "Invoice", gu: "ઇન્વૉઇસ" },
   partyDetail: { en: "Party Detail", gu: "પક્ષ વિગત" },
   settings: { en: "Settings", gu: "સેટિંગ" },
+  serviceManagement: { en: "Manage Services", gu: "સેવા મેનેજ" },
   tractors: { en: "Tractors", gu: "ટ્રેક્ટર" },
   drivers: { en: "Drivers", gu: "ડ્રાઇવર" },
   expenses: { en: "Expenses", gu: "ખર્ચ" },
@@ -217,6 +220,9 @@ export default function App() {
       case "partyDetail":
         setScreen("parties");
         break;
+      case "serviceManagement":
+        setScreen("settings");
+        break;
       case "settings":
       case "tractors":
       case "drivers":
@@ -305,6 +311,41 @@ export default function App() {
                 );
               })}
             </nav>
+
+            {/* Drawer Footer */}
+            <div className="absolute bottom-0 left-0 right-0 border-t border-border bg-card">
+              <button
+                type="button"
+                onClick={() => {
+                  navigateTo("settings");
+                  setDrawerOpen(false);
+                }}
+                className={`w-full flex items-center gap-4 px-5 py-3.5 text-sm font-semibold transition-colors ${
+                  screen === "settings"
+                    ? "bg-accent text-accent-foreground border-r-4 border-primary"
+                    : "text-foreground hover:bg-muted"
+                }`}
+                data-ocid="nav.settings.link"
+              >
+                <Settings
+                  size={20}
+                  className={
+                    screen === "settings"
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  }
+                />
+                {language === "gu" ? "સેટિંગ" : "Settings"}
+              </button>
+              <button
+                type="button"
+                className="w-full flex items-center gap-4 px-5 py-3.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+                data-ocid="nav.notifications.link"
+              >
+                <Bell size={20} className="text-muted-foreground" />
+                {language === "gu" ? "સૂચના" : "Notifications"}
+              </button>
+            </div>
           </div>
 
           {/* Top App Bar */}
@@ -376,23 +417,6 @@ export default function App() {
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    data-ocid="app.notifications.button"
-                  >
-                    <Bell size={20} className="text-muted-foreground" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigateTo("settings")}
-                    className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    data-ocid="app.settings.button"
-                  >
-                    <Settings size={20} className="text-muted-foreground" />
-                  </button>
-                </div>
               </>
             ) : (
               /* Sub-screen: back button + screen title */
@@ -409,15 +433,6 @@ export default function App() {
                   <span className="font-bold text-foreground text-base">
                     {screenLabel}
                   </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    data-ocid="app.notifications.button"
-                  >
-                    <Bell size={20} className="text-muted-foreground" />
-                  </button>
                 </div>
               </>
             )}
@@ -498,6 +513,9 @@ export default function App() {
                 onBack={() => setScreen("dashboard")}
                 onNavigate={(s) => setScreen(s as Screen)}
               />
+            )}
+            {screen === "serviceManagement" && (
+              <ServiceManagement onBack={() => setScreen("settings")} />
             )}
             {screen === "invoice" && invoiceBooking && (
               <Invoice
