@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowLeftRight,
   BarChart2,
   Bell,
@@ -111,12 +112,26 @@ const mainScreens: Screen[] = [
   "transactions",
   "bookings",
   "parties",
-  "tractors",
-  "expenses",
-  "reports",
-  "credits",
-  "settings",
 ];
+
+const screenTitles: Record<Screen, { en: string; gu: string }> = {
+  dashboard: { en: "Dashboard", gu: "ડેશબોર્ડ" },
+  transactions: { en: "Transactions", gu: "વ્યવહારો" },
+  bookings: { en: "Bookings", gu: "બુકિંગ" },
+  parties: { en: "Parties", gu: "પક્ષકારો" },
+  newTransaction: { en: "Naya Vyavhar", gu: "નવો વ્યવહાર" },
+  paymentIn: { en: "Payment In", gu: "ચૂકવણી લો" },
+  newBooking: { en: "Navi Booking", gu: "નવી બુકિંગ" },
+  bookingDetail: { en: "Booking Detail", gu: "બુકિંગ વિગત" },
+  invoice: { en: "Invoice", gu: "ઇન્વૉઇસ" },
+  partyDetail: { en: "Party Detail", gu: "પક્ષ વિગત" },
+  settings: { en: "Settings", gu: "સેટિંગ" },
+  tractors: { en: "Tractors", gu: "ટ્રેક્ટર" },
+  drivers: { en: "Drivers", gu: "ડ્રાઇવર" },
+  expenses: { en: "Expenses", gu: "ખર્ચ" },
+  credits: { en: "Udhar", gu: "ઉધાર" },
+  reports: { en: "Reports", gu: "અહેવાલ" },
+};
 
 export default function App() {
   const { language, darkMode } = useAppStore();
@@ -181,7 +196,47 @@ export default function App() {
     setDrawerOpen(false);
   };
 
-  const showActionBar = mainScreens.includes(screen);
+  const handleHeaderBack = () => {
+    switch (screen) {
+      case "newTransaction":
+        setBookingPrefill(null);
+        setScreen(bookingPrefill ? "bookings" : "transactions");
+        break;
+      case "paymentIn":
+        setScreen("transactions");
+        break;
+      case "newBooking":
+        setScreen("bookings");
+        break;
+      case "bookingDetail":
+        setScreen("bookings");
+        break;
+      case "invoice":
+        setScreen("bookingDetail");
+        break;
+      case "partyDetail":
+        setScreen("parties");
+        break;
+      case "settings":
+      case "tractors":
+      case "drivers":
+      case "expenses":
+      case "credits":
+      case "reports":
+        setScreen("dashboard");
+        break;
+      default:
+        setScreen("dashboard");
+    }
+  };
+
+  const isMainScreen = mainScreens.includes(screen);
+  const showActionBar = isMainScreen;
+  const currentTitle = screenTitles[screen];
+  const screenLabel = language === "gu" ? currentTitle.gu : currentTitle.en;
+
+  // suppress unused warning
+  void CalendarDays;
 
   return (
     <ErrorBoundary>
@@ -254,85 +309,118 @@ export default function App() {
 
           {/* Top App Bar */}
           <header className="flex items-center justify-between px-4 py-3 bg-card border-b border-border sticky top-0 z-30">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                className="p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
-                data-ocid="app.open_drawer.button"
-              >
-                <Menu size={22} className="text-foreground" />
-              </button>
-              {editingName ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const trimmed = nameInput.trim() || "KisanTractor Pro";
-                        setBusinessName(trimmed);
-                        setNameInput(trimmed);
-                        saveBusinessName(trimmed);
-                        setEditingName(false);
-                      }
-                      if (e.key === "Escape") {
-                        setNameInput(businessName);
-                        setEditingName(false);
-                      }
-                    }}
-                    className="font-bold text-foreground text-base bg-transparent border-b-2 border-primary outline-none w-40 max-w-[50vw]"
-                  />
+            {isMainScreen ? (
+              /* Main screen: hamburger + editable business name */
+              <>
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      const trimmed = nameInput.trim() || "KisanTractor Pro";
-                      setBusinessName(trimmed);
-                      setNameInput(trimmed);
-                      saveBusinessName(trimmed);
-                      setEditingName(false);
-                    }}
-                    className="p-1 rounded text-primary"
+                    onClick={() => setDrawerOpen(true)}
+                    className="p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
+                    data-ocid="app.open_drawer.button"
                   >
-                    <Check size={16} />
+                    <Menu size={22} className="text-foreground" />
+                  </button>
+                  {editingName ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        value={nameInput}
+                        onChange={(e) => setNameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const trimmed =
+                              nameInput.trim() || "KisanTractor Pro";
+                            setBusinessName(trimmed);
+                            setNameInput(trimmed);
+                            saveBusinessName(trimmed);
+                            setEditingName(false);
+                          }
+                          if (e.key === "Escape") {
+                            setNameInput(businessName);
+                            setEditingName(false);
+                          }
+                        }}
+                        className="font-bold text-foreground text-base bg-transparent border-b-2 border-primary outline-none w-40 max-w-[50vw]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed =
+                            nameInput.trim() || "KisanTractor Pro";
+                          setBusinessName(trimmed);
+                          setNameInput(trimmed);
+                          saveBusinessName(trimmed);
+                          setEditingName(false);
+                        }}
+                        className="p-1 rounded text-primary"
+                      >
+                        <Check size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNameInput(businessName);
+                        setEditingName(true);
+                      }}
+                      className="flex items-center gap-1 group"
+                    >
+                      <span className="font-bold text-foreground text-base">
+                        {businessName}
+                      </span>
+                      <Pencil
+                        size={13}
+                        className="text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity"
+                      />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                    data-ocid="app.notifications.button"
+                  >
+                    <Bell size={20} className="text-muted-foreground" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateTo("settings")}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                    data-ocid="app.settings.button"
+                  >
+                    <Settings size={20} className="text-muted-foreground" />
                   </button>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNameInput(businessName);
-                    setEditingName(true);
-                  }}
-                  className="flex items-center gap-1 group"
-                >
+              </>
+            ) : (
+              /* Sub-screen: back button + screen title */
+              <>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleHeaderBack}
+                    className="p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
+                    data-ocid="app.back.button"
+                  >
+                    <ArrowLeft size={22} className="text-foreground" />
+                  </button>
                   <span className="font-bold text-foreground text-base">
-                    {businessName}
+                    {screenLabel}
                   </span>
-                  <Pencil
-                    size={13}
-                    className="text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity"
-                  />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="p-2 rounded-lg hover:bg-muted transition-colors"
-                data-ocid="app.notifications.button"
-              >
-                <Bell size={20} className="text-muted-foreground" />
-              </button>
-              <button
-                type="button"
-                onClick={() => navigateTo("settings")}
-                className="p-2 rounded-lg hover:bg-muted transition-colors"
-                data-ocid="app.settings.button"
-              >
-                <Settings size={20} className="text-muted-foreground" />
-              </button>
-            </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                    data-ocid="app.notifications.button"
+                  >
+                    <Bell size={20} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </>
+            )}
           </header>
 
           {/* Main Content */}

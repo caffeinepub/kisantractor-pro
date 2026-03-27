@@ -1,32 +1,24 @@
 # KisanTractor Pro
 
 ## Current State
-- DriverLoginScreen.tsx exists and may be referenced in routing
-- Drivers screen allows owner to add/delete drivers
-- NewTransaction.tsx has no tractor or driver selection fields
-- App.tsx has no route/screen for driver login
+App has a top header with hamburger menu (drawer) on all screens. Sub-screens (NewTransaction, PaymentIn, NewBooking, BookingDetail, PartyDetail, Settings, Invoice, etc.) receive `onBack` props but there is no visible back button in the header. Users on mobile have no way to go back using the top navigation bar.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Tractor select dropdown (optional) in NewTransaction form
-- Driver select dropdown (optional) in NewTransaction form
-- Both fields show saved tractors/drivers from backend
+- Back arrow button (ChevronLeft/ArrowLeft) in the top header when user is on a sub-screen (non-main screen)
+- Screen title in the header when on sub-screens (e.g., "New Transaction", "Settings", "Party Detail", etc.)
 
 ### Modify
-- Remove DriverLoginScreen from the codebase (it is unused in App.tsx routing already, just delete the file and any imports)
-- Drivers screen: confirm no driver login flow remains, owner manages driver details directly
-- NewTransaction: after Service field, add optional Tractor field (dropdown from getAllTractors) and optional Driver field (dropdown from getAllDrivers)
+- App.tsx: Header should conditionally show back button + screen title instead of hamburger menu when on a sub-screen
+- Sub-screens are: newTransaction, paymentIn, newBooking, bookingDetail, invoice, partyDetail, settings, tractors, drivers, expenses, credits, reports
+- Main screens (no back button, show hamburger): dashboard, transactions, bookings, parties
 
 ### Remove
-- DriverLoginScreen.tsx file
-- DriverView.tsx if it references driver login
-- Any store fields related to driver login (loggedInDriverId, authRole driver logic)
+- Nothing removed
 
 ## Implementation Plan
-1. Delete DriverLoginScreen.tsx and DriverView.tsx
-2. Remove driver login references from store.ts (loggedInDriverId, setLoggedInDriverId, authRole)
-3. In NewTransaction.tsx, add optional tractor select and driver select dropdowns after Service field
-4. Load tractors with getAllTractors() and drivers with getAllDrivers() in NewTransaction
-5. Pass selectedTractorId and selectedDriverId in the createBooking call
-6. Validate - no typecheck errors
+1. In App.tsx, define a `screenTitles` map for sub-screen labels (Gujarati + English)
+2. Determine if current screen is a sub-screen (not in `mainScreens`)
+3. In the header: if sub-screen, show ArrowLeft back button + screen title; if main screen, show hamburger + business name as usual
+4. The back button calls the appropriate `onBack` handler based on current screen (same logic as what's passed to each screen component)
