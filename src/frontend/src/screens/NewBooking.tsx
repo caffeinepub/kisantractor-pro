@@ -1,6 +1,6 @@
-import { ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { Driver, Tractor } from "../backend.d";
+import { ArrowLeft, ChevronDown, Plus, Search, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Party } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
@@ -12,296 +12,329 @@ interface Props {
 
 export default function NewBooking({ onBack, onSaved }: Props) {
   const { actor } = useActor();
-  const { language, services, serviceRates } = useAppStore();
+  const { language, services } = useAppStore();
   const t = translations[language];
-  const [tractors, setTractors] = useState<Tractor[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [durationHours, setDurationHours] = useState(0);
-  const [durationMinutes, setDurationMinutes] = useState(0);
 
-  const [form, setForm] = useState({
-    customerName: "",
-    mobile: "",
-    village: "",
-    workType: services[0] ?? "Ploughing",
-    date: new Date().toISOString().slice(0, 16),
-    tractorId: "",
-    driverId: "",
-    paymentMode: "cash",
-    notes: "",
-  });
+  const [parties, setParties] = useState<Party[]>([]);
+  const [partySearch, setPartySearch] = useState("");
+  const [selectedParty, setSelectedParty] = useState<Party | null>(null);
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showAddNew, setShowAddNew] = useState(false);
+  const [newPartyName, setNewPartyName] = useState("");
+  const [newPartyPhone, setNewPartyPhone] = useState("");
+  const [addingParty, setAddingParty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  const [workType, setWorkType] = useState(services[0] ?? "Ploughing");
+  const [bookingDate, setBookingDate] = useState(
+    new Date().toISOString().slice(0, 16),
+  );
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const loadParties = useCallback(async () => {
     if (!actor) return;
-    Promise.all([actor.getAllTractors(), actor.getAllDrivers()]).then(
-      ([tr, dr]) => {
-        setTractors(tr.filter((t) => t.status === "available"));
-        setDrivers(dr);
-      },
-    );
+    try {
+      const all = await actor.getAllParties();
+      setParties(all);
+    } catch (e) {
+      console.error(e);
+    }
   }, [actor]);
 
-  const set = (key: string, val: string) =>
-    setForm((f) => ({ ...f, [key]: val }));
+  useEffect(() => {
+    loadParties();
+  }, [loadParties]);
 
-  const rates = serviceRates[form.workType];
-  const computedAmount = rates
-    ? durationHours * rates.perHour + durationMinutes * rates.perMinute
-    : 0;
-  const hasRate = !!rates;
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filteredParties = parties.filter((p) =>
+    p.name.toLowerCase().includes(partySearch.toLowerCase()),
+  );
+
+  const handleSelectParty = (party: Party) => {
+    setSelectedParty(party);
+    setPartySearch(party.name);
+    setMobileNumber(party.phone ?? "");
+    setShowDropdown(false);
+    setShowAddNew(false);
+  };
+
+  const handleClearParty = () => {
+    setSelectedParty(null);
+    setPartySearch("");
+    setMobileNumber("");
+    setShowDropdown(false);
+    setShowAddNew(false);
+  };
+
+  const handleAddNewParty = async () => {
+    if (!actor || !newPartyName.trim()) return;
+    setAddingParty(true);
+    try {
+      await actor.createParty({
+        id: BigInt(0),
+        name: newPartyName.trim(),
+        phone: newPartyPhone.trim(),
+        village: "",
+        createdAt: BigInt(0),
+      });
+      const refreshed = await actor.getAllParties();
+      setParties(refreshed);
+      const newP = refreshed.find((p) => p.name === newPartyName.trim());
+      if (newP) handleSelectParty(newP);
+      setShowAddNew(false);
+      setNewPartyName("");
+      setNewPartyPhone("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAddingParty(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!actor) return;
-    if (!form.customerName || !form.mobile || !form.village) {
-      alert("Please fill all required fields");
+    const customerName = selectedParty?.name ?? partySearch.trim();
+    if (!customerName) {
+      alert(
+        language === "gu" ? "ગ્રાહકનું નામ જરૂરી છે" : "Customer name is required",
+      );
       return;
     }
+    setSaving(true);
     try {
       await actor.createBooking({
         id: BigInt(0),
-        customerName: form.customerName,
-        mobile: form.mobile,
-        village: form.village,
-        workType: form.workType,
-        date: BigInt(new Date(form.date).getTime()),
-        tractorId: form.tractorId ? BigInt(form.tractorId) : BigInt(0),
-        driverId: form.driverId ? BigInt(form.driverId) : BigInt(0),
+        customerName,
+        mobile: mobileNumber.trim(),
+        village: "",
+        workType,
+        date: BigInt(new Date(bookingDate).getTime()),
+        tractorId: BigInt(0),
+        driverId: BigInt(0),
         status: "pending",
-        hoursWorked: durationHours,
+        hoursWorked: 0,
         acresWorked: 0,
         rateType: "hourly",
-        baseRate: rates?.perHour ?? 0,
-        totalAmount: computedAmount,
+        baseRate: 0,
+        totalAmount: 0,
         discount: 0,
         discountType: "percent",
-        finalAmount: computedAmount > 0 ? computedAmount : 0,
-        paymentMode: form.paymentMode,
+        finalAmount: 0,
+        paymentMode: "cash",
         advancePaid: 0,
-        balanceDue: computedAmount > 0 ? computedAmount : 0,
-        notes: form.notes,
+        balanceDue: 0,
+        notes: "",
         createdAt: BigInt(Date.now()),
       });
       onSaved();
     } catch (e) {
       console.error(e);
-      alert("Error saving booking");
+      alert(language === "gu" ? "સાચવવામાં ભૂલ" : "Error saving booking");
+    } finally {
+      setSaving(false);
     }
   };
 
   const inputClass =
-    "w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-3 text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500";
-  const labelClass =
-    "block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1";
+    "w-full border border-border rounded-xl px-3 py-3 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm";
+  const labelClass = "block text-sm font-semibold text-foreground mb-1";
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 pb-8">
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-2 rounded-full hover:bg-muted"
         >
-          <ArrowLeft size={22} className="text-gray-700 dark:text-gray-300" />
+          <ArrowLeft size={22} className="text-foreground" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-          {t.newBooking}
-        </h1>
+        <h1 className="text-xl font-bold text-foreground">{t.newBooking}</h1>
       </div>
 
       <div className="space-y-4">
+        {/* Party Search */}
         <div>
           <p className={labelClass}>{t.customerName} *</p>
-          <input
-            className={inputClass}
-            value={form.customerName}
-            onChange={(e) => set("customerName", e.target.value)}
-            data-ocid="new_booking.customer_name.input"
-          />
-        </div>
-        <div>
-          <p className={labelClass}>{t.mobile} *</p>
-          <input
-            className={inputClass}
-            type="tel"
-            value={form.mobile}
-            onChange={(e) => set("mobile", e.target.value)}
-            data-ocid="new_booking.mobile.input"
-          />
-        </div>
-        <div>
-          <p className={labelClass}>{t.village} *</p>
-          <input
-            className={inputClass}
-            value={form.village}
-            onChange={(e) => set("village", e.target.value)}
-            data-ocid="new_booking.village.input"
-          />
-        </div>
-        <div>
-          <p className={labelClass}>{t.workType}</p>
-          <select
-            className={inputClass}
-            value={form.workType}
-            onChange={(e) => set("workType", e.target.value)}
-            data-ocid="new_booking.work_type.select"
-          >
-            {services.map((svc) => (
-              <option key={svc} value={svc}>
-                {svc}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="relative" ref={dropdownRef}>
+            <div className="relative flex items-center">
+              <Search
+                size={16}
+                className="absolute left-3 text-muted-foreground"
+              />
+              <input
+                className={`${inputClass} pl-9 pr-9`}
+                value={partySearch}
+                onChange={(e) => {
+                  setPartySearch(e.target.value);
+                  setSelectedParty(null);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder={
+                  language === "gu" ? "Party શોધો..." : "Search party..."
+                }
+                data-ocid="new_booking.customer_name.input"
+              />
+              {partySearch && (
+                <button
+                  type="button"
+                  onClick={handleClearParty}
+                  className="absolute right-3 text-muted-foreground"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
 
-        {/* Duration inputs */}
-        <div>
-          <p className={labelClass}>{t.duration}</p>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                {t.hours}
-              </p>
-              <input
-                id="duration-hours"
-                type="number"
-                min="0"
-                value={durationHours}
-                onChange={(e) =>
-                  setDurationHours(Math.max(0, Number(e.target.value)))
-                }
-                className={inputClass}
-                data-ocid="new_booking.hours.input"
-              />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                {t.minutes}
-              </p>
-              <input
-                id="duration-minutes"
-                type="number"
-                min="0"
-                max="59"
-                value={durationMinutes}
-                onChange={(e) =>
-                  setDurationMinutes(
-                    Math.min(59, Math.max(0, Number(e.target.value))),
-                  )
-                }
-                className={inputClass}
-                data-ocid="new_booking.minutes.input"
-              />
-            </div>
+            {showDropdown && (
+              <div className="absolute z-50 w-full bg-card border border-border rounded-xl shadow-lg mt-1 max-h-52 overflow-y-auto">
+                {filteredParties.length === 0 && (
+                  <div className="p-3 text-sm text-muted-foreground text-center">
+                    {language === "gu" ? "Party મળી નહીં" : "No parties found"}
+                  </div>
+                )}
+                {filteredParties.map((p) => (
+                  <button
+                    type="button"
+                    key={Number(p.id)}
+                    onClick={() => handleSelectParty(p)}
+                    className="w-full text-left px-4 py-3 hover:bg-muted text-sm font-medium text-foreground border-b border-border last:border-0"
+                  >
+                    <span className="font-semibold">{p.name}</span>
+                    {p.phone && (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        {p.phone}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    setShowAddNew(true);
+                  }}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-primary font-semibold text-sm hover:bg-muted"
+                >
+                  <Plus size={16} />
+                  {language === "gu" ? "નવી Party ઉમેરો" : "Add new party"}
+                </button>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Calculated amount display */}
-        <div
-          className={`rounded-xl px-4 py-3 ${
-            hasRate
-              ? "bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700"
-              : "bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-          }`}
-          data-ocid="new_booking.calc_amount.panel"
-        >
-          {hasRate ? (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                {t.calcAmount}
-              </span>
-              <span className="text-lg font-bold text-green-800 dark:text-green-300">
-                ₹{computedAmount.toFixed(2)}
-              </span>
+          {showAddNew && (
+            <div className="mt-2 bg-muted/50 border border-border rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-foreground">
+                {language === "gu" ? "નવી Party" : "New Party"}
+              </p>
+              <input
+                className={inputClass}
+                placeholder={
+                  language === "gu" ? "Party નું નામ *" : "Party name *"
+                }
+                value={newPartyName}
+                onChange={(e) => setNewPartyName(e.target.value)}
+              />
+              <input
+                className={inputClass}
+                type="tel"
+                placeholder={language === "gu" ? "મોબાઇલ નંબર" : "Mobile number"}
+                value={newPartyPhone}
+                onChange={(e) => setNewPartyPhone(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddNewParty}
+                  disabled={addingParty || !newPartyName.trim()}
+                  className="flex-1 bg-primary text-primary-foreground font-semibold py-2 rounded-xl text-sm disabled:opacity-50"
+                >
+                  {addingParty ? "..." : language === "gu" ? "ઉમેરો" : "Add"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddNew(false)}
+                  className="px-3 py-2 rounded-xl border border-border text-sm text-muted-foreground"
+                >
+                  {language === "gu" ? "રદ" : "Cancel"}
+                </button>
+              </div>
             </div>
-          ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500 text-center">
-              ⚠️ {t.rateNotSet} — {form.workType}
-            </p>
           )}
         </div>
 
+        {/* Mobile */}
+        <div>
+          <p className={labelClass}>{t.mobile}</p>
+          <input
+            className={inputClass}
+            type="tel"
+            value={mobileNumber}
+            onChange={(e) => setMobileNumber(e.target.value)}
+            placeholder={language === "gu" ? "10 અંકનો નંબર" : "10 digit number"}
+            data-ocid="new_booking.mobile.input"
+          />
+        </div>
+
+        {/* Service */}
+        <div>
+          <p className={labelClass}>{t.workType}</p>
+          <div className="relative">
+            <select
+              className={`${inputClass} appearance-none pr-9`}
+              value={workType}
+              onChange={(e) => setWorkType(e.target.value)}
+              data-ocid="new_booking.work_type.select"
+            >
+              {services.map((svc) => (
+                <option key={svc} value={svc}>
+                  {svc}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={16}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            />
+          </div>
+        </div>
+
+        {/* Date & Time */}
         <div>
           <p className={labelClass}>{t.dateTime}</p>
           <input
             className={inputClass}
             type="datetime-local"
-            value={form.date}
-            onChange={(e) => set("date", e.target.value)}
+            value={bookingDate}
+            onChange={(e) => setBookingDate(e.target.value)}
             data-ocid="new_booking.date.input"
-          />
-        </div>
-        <div>
-          <p className={labelClass}>{t.selectTractor}</p>
-          <select
-            className={inputClass}
-            value={form.tractorId}
-            onChange={(e) => set("tractorId", e.target.value)}
-            data-ocid="new_booking.tractor.select"
-          >
-            <option value="">-- {t.selectTractor} --</option>
-            {tractors.map((tr) => (
-              <option key={Number(tr.id)} value={String(tr.id)}>
-                {tr.name} ({tr.number})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <p className={labelClass}>{t.selectDriver}</p>
-          <select
-            className={inputClass}
-            value={form.driverId}
-            onChange={(e) => set("driverId", e.target.value)}
-            data-ocid="new_booking.driver.select"
-          >
-            <option value="">-- {t.selectDriver} --</option>
-            {drivers.map((dr) => (
-              <option key={Number(dr.id)} value={String(dr.id)}>
-                {dr.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Payment Mode */}
-        <div>
-          <p className={labelClass}>{t.paymentMode}</p>
-          <div className="flex gap-3">
-            {["cash", "upi"].map((pm) => (
-              <button
-                type="button"
-                key={pm}
-                onClick={() => set("paymentMode", pm)}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition ${
-                  form.paymentMode === pm
-                    ? "border-green-600 bg-green-50 dark:bg-green-900 text-green-700"
-                    : "border-gray-300 text-gray-600 dark:text-gray-300 dark:border-gray-500"
-                }`}
-              >
-                {pm === "cash" ? t.cash : t.upi}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className={labelClass}>{t.notes}</p>
-          <textarea
-            className={inputClass}
-            rows={2}
-            value={form.notes}
-            onChange={(e) => set("notes", e.target.value)}
-            data-ocid="new_booking.notes.textarea"
           />
         </div>
 
         <button
           type="button"
           onClick={handleSubmit}
-          className="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-4 rounded-xl text-lg shadow"
+          disabled={saving}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 rounded-xl text-base shadow disabled:opacity-50"
           data-ocid="new_booking.submit.button"
         >
-          {t.save}
+          {saving ? "..." : language === "gu" ? "બુકિંગ સાચવો" : "Save Booking"}
         </button>
       </div>
     </div>

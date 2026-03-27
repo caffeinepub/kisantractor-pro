@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   BarChart2,
   Bell,
+  CalendarDays,
   Check,
   IndianRupee,
   LayoutDashboard,
@@ -108,6 +109,7 @@ const drawerNavItems = [
 const mainScreens: Screen[] = [
   "dashboard",
   "transactions",
+  "bookings",
   "parties",
   "tractors",
   "expenses",
@@ -124,6 +126,12 @@ export default function App() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [invoiceBooking, setInvoiceBooking] = useState<Booking | null>(null);
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
+  const [bookingPrefill, setBookingPrefill] = useState<{
+    partyName?: string;
+    mobile?: string;
+    workType?: string;
+    bookingId?: bigint;
+  } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string>(
     () => localStorage.getItem("businessName") || "KisanTractor Pro",
@@ -156,6 +164,16 @@ export default function App() {
   const openPartyDetail = (party: Party) => {
     setSelectedParty(party);
     setScreen("partyDetail");
+  };
+
+  const handleCompleteBooking = (booking: Booking) => {
+    setBookingPrefill({
+      partyName: booking.customerName,
+      mobile: booking.mobile,
+      workType: booking.workType,
+      bookingId: booking.id,
+    });
+    setScreen("newTransaction");
   };
 
   const navigateTo = (s: Screen) => {
@@ -332,8 +350,19 @@ export default function App() {
             )}
             {screen === "newTransaction" && (
               <NewTransaction
-                onBack={() => setScreen("transactions")}
-                onSaved={() => setScreen("transactions")}
+                onBack={() => {
+                  setBookingPrefill(null);
+                  setScreen(bookingPrefill ? "bookings" : "transactions");
+                }}
+                onSaved={() => {
+                  setBookingPrefill(null);
+                  setScreen(bookingPrefill ? "bookings" : "transactions");
+                }}
+                prefill={bookingPrefill ?? undefined}
+                onBookingCompleted={() => {
+                  setBookingPrefill(null);
+                  setScreen("bookings");
+                }}
               />
             )}
             {screen === "paymentIn" && (
@@ -346,6 +375,7 @@ export default function App() {
               <Bookings
                 onNewBooking={() => setScreen("newBooking")}
                 onBookingTap={openBookingDetail}
+                onComplete={handleCompleteBooking}
               />
             )}
             {screen === "newBooking" && (
@@ -360,6 +390,7 @@ export default function App() {
                 onBack={() => setScreen("bookings")}
                 onInvoice={openInvoice}
                 onUpdated={(b) => setSelectedBooking(b)}
+                onComplete={handleCompleteBooking}
               />
             )}
             {screen === "tractors" && <TractorScreen />}
@@ -391,24 +422,36 @@ export default function App() {
           {/* Vyapar-style Bottom Action Bar */}
           {showActionBar && (
             <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-20">
-              <div className="bg-card border-t border-border px-4 py-3 flex items-center justify-between gap-3">
+              <div className="bg-card border-t border-border px-3 py-2.5 flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => navigateTo("paymentIn")}
                   data-ocid="app.payment_lo.button"
-                  className="flex-1 py-3 rounded-full bg-primary text-primary-foreground font-bold text-sm text-center shadow-md active:scale-95 transition-transform"
+                  className="flex-1 py-2.5 rounded-full bg-primary text-primary-foreground font-bold text-xs text-center shadow-md active:scale-95 transition-transform"
                 >
                   {language === "gu" ? "ચૂકવણી લો" : "Payment In"}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setScreen("newTransaction")}
+                  onClick={() => {
+                    setBookingPrefill(null);
+                    setScreen("newTransaction");
+                  }}
                   data-ocid="app.naya_kaam.button"
-                  className="flex-1 py-3 rounded-full font-bold text-sm text-center shadow-md active:scale-95 transition-transform"
+                  className="flex-1 py-2.5 rounded-full font-bold text-xs text-center shadow-md active:scale-95 transition-transform"
                   style={{ background: "oklch(0.65 0.19 47)", color: "white" }}
                 >
                   {language === "gu" ? "વ્યવહાર" : "Transaction"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo("bookings")}
+                  data-ocid="app.bookings.button"
+                  className="flex-1 py-2.5 rounded-full font-bold text-xs text-center shadow-md active:scale-95 transition-transform bg-card border-2 border-primary text-primary"
+                >
+                  {language === "gu" ? "બુકિંગ" : "Bookings"}
                 </button>
               </div>
             </div>

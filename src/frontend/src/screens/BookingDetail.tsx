@@ -1,7 +1,12 @@
-import { ArrowLeft, CheckCircle, Clock, FileText, Receipt } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Receipt,
+} from "lucide-react";
 import { useState } from "react";
 import type { Booking } from "../backend.d";
-import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
 
@@ -10,68 +15,25 @@ interface Props {
   onBack: () => void;
   onInvoice: (booking: Booking) => void;
   onUpdated: (booking: Booking) => void;
+  onComplete: (booking: Booking) => void;
 }
 
 export default function BookingDetail({
   booking,
   onBack,
   onInvoice,
-  onUpdated,
+  onComplete,
 }: Props) {
-  const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
-  const [b, setB] = useState<Booking>(booking);
-  const [discount, setDiscount] = useState(0);
-  const [discountType, setDiscountType] = useState<"percent" | "fixed">(
-    "percent",
-  );
-  const [saving, setSaving] = useState(false);
-
-  const discountAmount =
-    discountType === "percent" ? (b.totalAmount * discount) / 100 : discount;
-  const finalAmount = Math.max(0, b.totalAmount - discountAmount);
-  const balanceDue = Math.max(0, finalAmount - b.advancePaid);
-
-  const updateStatus = async (status: string) => {
-    if (!actor) return;
-    setSaving(true);
-    try {
-      const updated: Booking = { ...b, status };
-      await actor.updateBooking(b.id, updated);
-      setB(updated);
-      onUpdated(updated);
-    } catch (e) {
-      console.error(e);
-    }
-    setSaving(false);
-  };
-
-  const applyDiscount = async () => {
-    if (!actor) return;
-    setSaving(true);
-    try {
-      const updated: Booking = {
-        ...b,
-        discount,
-        discountType,
-        finalAmount,
-        balanceDue,
-        status: "completed",
-      };
-      await actor.updateBooking(b.id, updated);
-      setB(updated);
-      onUpdated(updated);
-    } catch (e) {
-      console.error(e);
-    }
-    setSaving(false);
-  };
+  const [b] = useState<Booking>(booking);
 
   const statusColor = (s: string) => {
-    if (s === "completed") return "bg-green-100 text-green-700";
-    if (s === "ongoing") return "bg-blue-100 text-blue-700";
-    return "bg-yellow-100 text-yellow-700";
+    if (s === "completed")
+      return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400";
+    if (s === "ongoing")
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400";
+    return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400";
   };
 
   const statusLabel = (s: string) => {
@@ -79,9 +41,6 @@ export default function BookingDetail({
     if (s === "ongoing") return t.ongoing;
     return t.pending;
   };
-
-  const inputClass =
-    "border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500";
 
   // Compute transaction entries
   const bookingDate = new Date(Number(b.date)).toLocaleDateString();
@@ -130,17 +89,16 @@ export default function BookingDetail({
         <button
           type="button"
           onClick={onBack}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-2 rounded-full hover:bg-muted"
         >
           <ArrowLeft size={22} />
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-          {t.details}
-        </h1>
+        <h1 className="text-xl font-bold text-foreground">{t.details}</h1>
         <button
           type="button"
           onClick={() => onInvoice(b)}
           className="ml-auto flex items-center gap-1 bg-orange-500 text-white px-3 py-2 rounded-xl text-sm"
+          data-ocid="booking_detail.invoice.button"
         >
           <FileText size={16} />
           {t.invoice}
@@ -148,9 +106,9 @@ export default function BookingDetail({
       </div>
 
       {/* Customer Info */}
-      <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-2">
+      <div className="bg-card rounded-xl shadow-sm border border-border p-4 space-y-2">
         <div className="flex justify-between">
-          <span className="font-bold text-gray-900 dark:text-white text-lg">
+          <span className="font-bold text-foreground text-lg">
             {b.customerName}
           </span>
           <span
@@ -159,63 +117,68 @@ export default function BookingDetail({
             {statusLabel(b.status)}
           </span>
         </div>
-        <p className="text-gray-500 text-sm">📞 {b.mobile}</p>
-        <p className="text-gray-500 text-sm">👨‍🌾 {b.workType}</p>
-        <p className="text-gray-500 text-sm">
-          📅 {new Date(Number(b.date)).toLocaleString()}
+        {b.mobile && (
+          <p className="text-muted-foreground text-sm">📞 {b.mobile}</p>
+        )}
+        <p className="text-muted-foreground text-sm">👨‍🌾 {b.workType}</p>
+        <p className="text-muted-foreground text-sm">
+          📅{" "}
+          {new Date(Number(b.date)).toLocaleString(
+            language === "gu" ? "gu-IN" : "en-IN",
+            {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            },
+          )}
         </p>
       </div>
 
-      {/* Work Details */}
-      <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-2">
-        <h3 className="font-bold text-gray-800 dark:text-white">
-          {t.workType}
-        </h3>
-        <div className="flex justify-between text-sm font-semibold border-t pt-2">
-          <span>{t.totalAmount}</span>
-          <span>₹{b.totalAmount.toLocaleString()}</span>
-        </div>
-        {b.discount > 0 && (
-          <div className="flex justify-between text-sm text-red-500">
-            <span>{t.discount}</span>
-            <span>- ₹{(b.totalAmount - b.finalAmount).toFixed(0)}</span>
+      {/* Work Details (if amount exists) */}
+      {b.totalAmount > 0 && (
+        <div className="bg-card rounded-xl shadow-sm border border-border p-4 space-y-2">
+          <h3 className="font-bold text-foreground">{t.workType}</h3>
+          <div className="flex justify-between text-sm font-semibold border-t pt-2">
+            <span>{t.totalAmount}</span>
+            <span>₹{b.totalAmount.toLocaleString()}</span>
           </div>
-        )}
-        <div className="flex justify-between font-bold text-green-700 dark:text-green-400">
-          <span>{t.finalAmount}</span>
-          <span>₹{b.finalAmount.toLocaleString()}</span>
+          {b.discount > 0 && (
+            <div className="flex justify-between text-sm text-red-500">
+              <span>{t.discount}</span>
+              <span>- ₹{(b.totalAmount - b.finalAmount).toFixed(0)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold text-green-700 dark:text-green-400">
+            <span>{t.finalAmount}</span>
+            <span>₹{b.finalAmount.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">{t.advancePaid}</span>
+            <span>₹{b.advancePaid.toLocaleString()}</span>
+          </div>
+          <div
+            className={`flex justify-between text-sm font-semibold ${b.balanceDue > 0 ? "text-red-600" : "text-green-600"}`}
+          >
+            <span>{t.balanceDue}</span>
+            <span>₹{b.balanceDue.toLocaleString()}</span>
+          </div>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">{t.advancePaid}</span>
-          <span>₹{b.advancePaid.toLocaleString()}</span>
-        </div>
-        <div
-          className={`flex justify-between text-sm font-semibold ${b.balanceDue > 0 ? "text-red-600" : "text-green-600"}`}
-        >
-          <span>{t.balanceDue}</span>
-          <span>₹{b.balanceDue.toLocaleString()}</span>
-        </div>
-      </div>
+      )}
 
       {/* Transaction History */}
-      <div
-        className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-3"
-        data-ocid="booking_detail.transactions.panel"
-      >
-        <div className="flex items-center gap-2">
-          <Receipt size={18} className="text-green-600" />
-          <h3 className="font-bold text-gray-800 dark:text-white">
-            {t.transactionHistory}
-          </h3>
-        </div>
-        {transactions.length === 0 ? (
-          <p
-            className="text-sm text-gray-400 text-center py-2"
-            data-ocid="booking_detail.transactions.empty_state"
-          >
-            {t.noTransactions}
-          </p>
-        ) : (
+      {transactions.length > 0 && (
+        <div
+          className="bg-card rounded-xl shadow-sm border border-border p-4 space-y-3"
+          data-ocid="booking_detail.transactions.panel"
+        >
+          <div className="flex items-center gap-2">
+            <Receipt size={18} className="text-green-600" />
+            <h3 className="font-bold text-foreground">
+              {t.transactionHistory}
+            </h3>
+          </div>
           <div className="space-y-2">
             {transactions.map((tx, idx) => (
               <div
@@ -228,137 +191,58 @@ export default function BookingDetail({
                 data-ocid={`booking_detail.transactions.item.${idx + 1}`}
               >
                 <div
-                  className={`flex-shrink-0 ${
-                    tx.type === "balance_due"
-                      ? "text-orange-500"
-                      : "text-green-600"
-                  }`}
+                  className={`flex-shrink-0 ${tx.type === "balance_due" ? "text-orange-500" : "text-green-600"}`}
                 >
                   {tx.type === "balance_due" ? (
                     <Clock size={20} />
                   ) : (
-                    <CheckCircle size={20} />
+                    <CheckCircle2 size={20} />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p
-                    className={`text-sm font-semibold ${
-                      tx.type === "balance_due"
-                        ? "text-orange-700 dark:text-orange-300"
-                        : "text-green-700 dark:text-green-300"
-                    }`}
+                    className={`text-sm font-semibold ${tx.type === "balance_due" ? "text-orange-700 dark:text-orange-300" : "text-green-700 dark:text-green-300"}`}
                   >
                     {tx.label}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {tx.mode.toUpperCase()} • {tx.date}
                   </p>
                 </div>
                 <p
-                  className={`font-bold text-sm ${
-                    tx.type === "balance_due"
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-green-700 dark:text-green-400"
-                  }`}
+                  className={`font-bold text-sm ${tx.type === "balance_due" ? "text-orange-600 dark:text-orange-400" : "text-green-700 dark:text-green-400"}`}
                 >
                   ₹{tx.amount.toLocaleString()}
                 </p>
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Status Actions */}
-      {b.status !== "completed" && (
-        <div className="flex gap-3">
-          {b.status === "pending" && (
-            <button
-              type="button"
-              onClick={() => updateStatus("ongoing")}
-              disabled={saving}
-              className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl"
-            >
-              {t.markOngoing}
-            </button>
-          )}
-          {b.status === "ongoing" && (
-            <button
-              type="button"
-              onClick={() => updateStatus("completed")}
-              disabled={saving}
-              className="flex-1 bg-green-700 text-white font-bold py-3 rounded-xl"
-            >
-              {t.markComplete}
-            </button>
-          )}
         </div>
       )}
 
-      {/* Discount Section - show when completing */}
-      {b.status === "ongoing" && (
-        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-xl p-4 space-y-3">
-          <h3 className="font-bold text-orange-800 dark:text-orange-300">
-            {t.applyDiscount}
-          </h3>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setDiscountType("percent")}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 ${
-                discountType === "percent"
-                  ? "border-orange-500 bg-orange-100 text-orange-700"
-                  : "border-gray-300 text-gray-500"
-              }`}
-            >
-              {t.percent} (%)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiscountType("fixed")}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 ${
-                discountType === "fixed"
-                  ? "border-orange-500 bg-orange-100 text-orange-700"
-                  : "border-gray-300 text-gray-500"
-              }`}
-            >
-              {t.fixed} (₹)
-            </button>
-          </div>
-          <input
-            className={`w-full ${inputClass}`}
-            type="number"
-            min="0"
-            value={discount}
-            onChange={(e) =>
-              setDiscount(Number.parseFloat(e.target.value) || 0)
-            }
-            placeholder={discountType === "percent" ? "0%" : "\u20b90"}
-          />
-          {discount > 0 && (
-            <div className="text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-500">{t.totalAmount}</span>
-                <span>₹{b.totalAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-red-500">
-                <span>{t.discount}</span>
-                <span>- ₹{discountAmount.toFixed(0)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-green-700">
-                <span>{t.finalAmount}</span>
-                <span>₹{finalAmount.toLocaleString()}</span>
-              </div>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={applyDiscount}
-            disabled={saving}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl"
-          >
-            {t.markComplete} & {t.save}
-          </button>
+      {/* Complete Karo Button */}
+      {b.status !== "completed" && (
+        <button
+          type="button"
+          onClick={() => onComplete(b)}
+          data-ocid="booking_detail.complete.button"
+          className="w-full flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-base shadow-md active:scale-95 transition-transform"
+        >
+          <CheckCircle2 size={22} />
+          {language === "gu"
+            ? "Complete કરો (Transaction બનાવો)"
+            : "Complete Karo (Transaction Banao)"}
+        </button>
+      )}
+
+      {b.status === "completed" && (
+        <div className="flex items-center justify-center gap-2 py-4 text-green-600">
+          <CheckCircle2 size={22} />
+          <span className="font-semibold">
+            {language === "gu"
+              ? "આ બુકિંગ Complete થઈ ગઈ"
+              : "This booking is completed"}
+          </span>
         </div>
       )}
     </div>

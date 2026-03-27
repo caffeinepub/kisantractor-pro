@@ -20,6 +20,13 @@ import { parseVoiceTransaction } from "../utils/parseVoiceTransaction";
 interface Props {
   onBack: () => void;
   onSaved: () => void;
+  prefill?: {
+    partyName?: string;
+    mobile?: string;
+    workType?: string;
+    bookingId?: bigint;
+  };
+  onBookingCompleted?: (bookingId: bigint) => void;
 }
 
 interface SavedTxInfo {
@@ -35,7 +42,12 @@ interface SavedTxInfo {
   date: string;
 }
 
-export default function NewTransaction({ onBack, onSaved }: Props) {
+export default function NewTransaction({
+  onBack,
+  onSaved,
+  prefill,
+  onBookingCompleted,
+}: Props) {
   const { actor } = useActor();
   const { language, services, serviceRates } = useAppStore();
   const t = translations[language];
@@ -57,7 +69,10 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
   const [txType, setTxType] = useState<"advance" | "balance">("advance");
   const [discountAmount, setDiscountAmount] = useState(0);
   const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [partialPayment, setPartialPayment] = useState(0);
   const [paymentMode, setPaymentMode] = useState("cash");
+  const [cashSplit, setCashSplit] = useState(0);
+  const [upiSplit, setUpiSplit] = useState(0);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
   const [saving, setSaving] = useState(false);
   const [voiceReviewOpen, setVoiceReviewOpen] = useState(false);
@@ -112,7 +127,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
     minutes: number;
     amount: number;
   }) => {
-    // Pre-fill party
     if (data.partyId) {
       const p = parties.find((pa) => pa.id.toString() === data.partyId);
       if (p) {
@@ -124,14 +138,11 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
       setPartySearch(data.partyName);
       setSelectedParty(null);
     }
-    // Pre-fill service
     if (data.serviceName && services.includes(data.serviceName)) {
       setWorkType(data.serviceName);
     }
-    // Pre-fill hours/minutes
     setDurationHours(data.hours);
     setDurationMinutes(data.minutes);
-    // Pre-fill amount if given and no rate
     if (data.amount > 0 && !serviceRates[data.serviceName]) {
       setManualAmount(String(data.amount));
     }
@@ -146,6 +157,11 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
   const finalAmount =
     manualAmount !== "" ? Number(manualAmount) : computedAmount;
   const bakiAmount = Math.max(0, finalAmount - discountAmount - advanceAmount);
+  // For balance type: udhar = total - discount - partial payment
+  const udharAmount = Math.max(
+    0,
+    finalAmount - discountAmount - partialPayment,
+  );
 
   const loadParties = useCallback(async () => {
     if (!actor) return;
@@ -161,7 +177,14 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
     loadParties();
   }, [loadParties]);
 
-  // Close dropdown on outside click
+  // Apply prefill when provided (from booking completion)
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.partyName) setPartySearch(prefill.partyName);
+    if (prefill.mobile) setMobileNumber(prefill.mobile);
+    if (prefill.workType) setWorkType(prefill.workType);
+  }, [prefill]);
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (
@@ -207,7 +230,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         createdAt: BigInt(0),
       });
       await loadParties();
-      // Auto-select the newly created party
       const refreshed = await actor.getAllParties();
       setParties(refreshed);
       const newP = refreshed.find((p) => p.name === newPartyName.trim());
@@ -224,29 +246,76 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
 
   const handleSubmit = async () => {
     if (!actor) return;
-    const customerName = selectedParty?.name ?? partySearch.trim();
-    if (!customerName) {
-      alert(
-        language === "gu" ? "ગ્રાહકનું નામ જરૂરી છે" : "Customer name is required",
-      );
-      return;
+
+    let customerName = selectedParty?.name ?? partySearch.trim();
+    let mobile = mobileNumber.trim();
+
+    if (txType === "advance") {
+      // Party is optional for advance
+      if (!customerName) {
+        // Derive name from payment mode
+        if (language === "gu") {
+          customerName =
+            paymentMode === "cash"
+              ? "કેશ એન્ટ્રી"
+              : paymentMode === "upi"
+                ? "UPI એન્ટ્રી"
+                : "સ્પ્લિટ એન્ટ્રી";
+        } else {
+          customerName =
+            paymentMode === "cash"
+              ? "Cash Entry"
+              : paymentMode === "upi"
+                ? "UPI Entry"
+                : "Split Entry";
+        }
+      }
+      // Mobile is optional for advance
+      if (!mobile) mobile = "";
+    } else {
+      // Balance: party is required
+      if (!customerName) {
+        alert(
+          language === "gu" ? "ગ્રાહકનું નામ જરૂરી છે" : "Customer name is required",
+        );
+        return;
+      }
+      if (!mobile) {
+        alert(
+          language === "gu" ? "મોબાઇલ નંબર જરૂરી છે" : "Mobile number is required",
+        );
+        return;
+      }
     }
-    if (!mobileNumber.trim()) {
-      alert(
-        language === "gu" ? "મોબાઇલ નંબર જરૂરી છે" : "Mobile number is required",
-      );
-      return;
-    }
+
     if (finalAmount <= 0) {
       alert(language === "gu" ? "રકમ દાખલ કરો" : "Please enter an amount");
       return;
     }
+
     setSaving(true);
     try {
+      let effectivePaymentMode: string;
+      let effectiveAdvancePaid: number;
+      let effectiveBalanceDue: number;
+
+      if (txType === "balance") {
+        effectivePaymentMode = "udhar";
+        effectiveAdvancePaid = partialPayment;
+        effectiveBalanceDue = udharAmount;
+      } else {
+        effectivePaymentMode =
+          paymentMode === "split"
+            ? `cash:${cashSplit}|upi:${upiSplit}`
+            : paymentMode;
+        effectiveAdvancePaid = advanceAmount;
+        effectiveBalanceDue = bakiAmount;
+      }
+
       await actor.createBooking({
         id: BigInt(0),
         customerName,
-        mobile: mobileNumber.trim(),
+        mobile,
         village: "",
         workType,
         date: BigInt(new Date(date).getTime()),
@@ -261,25 +330,37 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         discount: discountAmount,
         discountType: "amount",
         finalAmount: finalAmount - discountAmount,
-        paymentMode,
-        advancePaid: advanceAmount,
-        balanceDue: bakiAmount,
+        paymentMode: effectivePaymentMode,
+        advancePaid: effectiveAdvancePaid,
+        balanceDue: effectiveBalanceDue,
         notes: "",
         createdAt: BigInt(Date.now()),
       });
-      // Show WhatsApp share popup instead of navigating away
       setSavedTx({
         customerName,
-        mobile: mobileNumber.trim(),
+        mobile,
         workType,
         totalAmount: finalAmount,
         discountAmount,
-        advanceAmount,
-        bakiAmount,
+        advanceAmount: effectiveAdvancePaid,
+        bakiAmount: effectiveBalanceDue,
         txType,
-        paymentMode,
+        paymentMode: effectivePaymentMode,
         date,
       });
+      // Mark booking as completed if this transaction came from a booking
+      if (prefill?.bookingId) {
+        try {
+          const existingBooking = await actor.getBooking(prefill.bookingId);
+          await actor.updateBooking(prefill.bookingId, {
+            ...existingBooking,
+            status: "completed",
+          });
+          if (onBookingCompleted) onBookingCompleted(prefill.bookingId);
+        } catch (err) {
+          console.error("Failed to mark booking as completed:", err);
+        }
+      }
     } catch (e) {
       console.error(e);
       alert(language === "gu" ? "સાચવવામાં ભૂલ" : "Error saving transaction");
@@ -300,10 +381,14 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         "",
         `કુલ રકમ: ₹${tx.totalAmount.toFixed(0)}`,
         tx.discountAmount > 0 ? `છૂટ: -₹${tx.discountAmount.toFixed(0)}` : null,
-        tx.advanceAmount > 0 ? `એડ્વાન્સ: ₹${tx.advanceAmount.toFixed(0)}` : null,
-        `બાકી (ઉધાર): ₹${tx.bakiAmount.toFixed(0)}`,
+        tx.advanceAmount > 0 ? `ભર્યા: ₹${tx.advanceAmount.toFixed(0)}` : null,
+        `ઉધાર (બાકી): ₹${tx.bakiAmount.toFixed(0)}`,
         "",
-        `ચૂકવણી: ${tx.paymentMode.toUpperCase()}`,
+        tx.paymentMode !== "udhar"
+          ? tx.paymentMode.startsWith("cash:")
+            ? `ચૂકવણી: સ્પ્લિટ (${tx.paymentMode.replace("|", " + ").replace("cash:", "💵₹").replace("upi:", "📱₹")})`
+            : `ચૂકવણી: ${tx.paymentMode.toUpperCase()}`
+          : "પ્રકાર: ઉધાર",
       ].filter(Boolean);
       return lines.join("\n");
     }
@@ -318,10 +403,12 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
       tx.discountAmount > 0
         ? `Discount: -₹${tx.discountAmount.toFixed(0)}`
         : null,
-      tx.advanceAmount > 0 ? `Advance: ₹${tx.advanceAmount.toFixed(0)}` : null,
+      tx.advanceAmount > 0 ? `Paid Now: ₹${tx.advanceAmount.toFixed(0)}` : null,
       `Balance (Udhar): ₹${tx.bakiAmount.toFixed(0)}`,
       "",
-      `Payment: ${tx.paymentMode.toUpperCase()}`,
+      tx.paymentMode !== "udhar"
+        ? `Payment: ${tx.paymentMode.toUpperCase()}`
+        : "Type: Udhar",
     ].filter(Boolean);
     return lines.join("\n");
   };
@@ -333,10 +420,11 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
   // WhatsApp Share Success Screen
   if (savedTx) {
     const waMsg = buildWhatsAppMessage(savedTx);
-    const waUrl = `https://wa.me/${savedTx.mobile.replace(/\D/g, "")}?text=${encodeURIComponent(waMsg)}`;
+    const waUrl = savedTx.mobile
+      ? `https://wa.me/${savedTx.mobile.replace(/\D/g, "")}?text=${encodeURIComponent(waMsg)}`
+      : `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
     return (
       <div className="p-4 flex flex-col items-center justify-center min-h-[60vh] space-y-6">
-        {/* Success check */}
         <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
           <span className="text-4xl">✅</span>
         </div>
@@ -349,7 +437,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
           </p>
         </div>
 
-        {/* Invoice summary card */}
         <div className="w-full bg-card border border-border rounded-2xl p-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">
@@ -373,42 +460,50 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
           )}
           {savedTx.advanceAmount > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">{t.advanceAmount}</span>
+              <span className="text-muted-foreground">
+                {savedTx.txType === "balance"
+                  ? language === "gu"
+                    ? "આ વખત ભર્યા"
+                    : "Paid Now"
+                  : t.advanceAmount}
+              </span>
               <span className="font-semibold text-blue-500">
                 ₹{savedTx.advanceAmount.toFixed(0)}
               </span>
             </div>
           )}
           <div className="flex justify-between border-t border-border pt-2">
-            <span className="font-bold text-orange-600">{t.bakiAmount}</span>
+            <span className="font-bold text-orange-600">
+              {language === "gu" ? "ઉધાર (બાકી)" : "Udhar (Balance)"}
+            </span>
             <span className="font-bold text-orange-600">
               ₹{savedTx.bakiAmount.toFixed(0)}
             </span>
           </div>
         </div>
 
-        {/* WhatsApp button */}
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="w-full flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-4 rounded-2xl text-base shadow-lg"
-          data-ocid="new_transaction.whatsapp_share.button"
-        >
-          <span className="text-xl">💬</span>
-          {language === "gu"
-            ? "WhatsApp પર Invoice મોકલો"
-            : "Send Invoice on WhatsApp"}
-        </a>
+        {savedTx.mobile && (
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="w-full flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-4 rounded-2xl text-base shadow-lg"
+            data-ocid="new_transaction.whatsapp_share.button"
+          >
+            <span className="text-xl">💬</span>
+            {language === "gu"
+              ? "WhatsApp પર Invoice મોકલો"
+              : "Send Invoice on WhatsApp"}
+          </a>
+        )}
 
-        {/* Skip button */}
         <button
           type="button"
           onClick={onSaved}
           className="w-full border border-border text-foreground font-semibold py-3 rounded-2xl text-sm"
           data-ocid="new_transaction.skip_whatsapp.button"
         >
-          {language === "gu" ? "અત્યારે નહીં" : "Skip"}
+          {language === "gu" ? "અત્યારે નહીં" : "Done"}
         </button>
       </div>
     );
@@ -429,7 +524,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         <h1 className="text-xl font-bold text-foreground flex-1">
           {t.newTransaction}
         </h1>
-        {/* Voice Input Button */}
         <button
           type="button"
           onClick={handleMicClick}
@@ -439,7 +533,7 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
               ? "bg-red-500 text-white animate-pulse shadow-lg"
               : "bg-primary/10 text-primary hover:bg-primary/20"
           }`}
-          title={language === "gu" ? t.voiceInput : t.voiceInput}
+          title={t.voiceInput}
         >
           {isListening ? <MicOff size={18} /> : <Mic size={18} />}
           <span className="hidden sm:inline">
@@ -460,7 +554,10 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => setTxType("advance")}
+            onClick={() => {
+              setTxType("advance");
+              setPartialPayment(0);
+            }}
             data-ocid="new_transaction.advance.toggle"
             className={`flex-1 py-4 rounded-xl text-sm font-bold border-2 transition-all ${
               txType === "advance"
@@ -472,22 +569,54 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setTxType("balance")}
+            onClick={() => {
+              setTxType("balance");
+              setPartialPayment(0);
+            }}
             data-ocid="new_transaction.balance.toggle"
             className={`flex-1 py-4 rounded-xl text-sm font-bold border-2 transition-all ${
               txType === "balance"
-                ? "border-primary bg-accent text-accent-foreground"
+                ? "border-orange-500 bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
                 : "border-border text-muted-foreground bg-background"
             }`}
           >
-            ✅ {t.balanceType}
+            📒 {t.balanceType}
           </button>
         </div>
       </div>
 
+      {/* Advance type info banner */}
+      {txType === "advance" && (
+        <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 px-4 py-2.5 text-xs text-blue-700 dark:text-blue-300">
+          💡{" "}
+          {language === "gu"
+            ? "એડ્વાન્સ: Party ની વિગત ભરવી જરૂરી નથી. ખાલી રહેવા દો તો Cash/UPI Entry સેવ થશે."
+            : "Advance: Party details are optional. Leave blank to save as Cash/UPI Entry."}
+        </div>
+      )}
+
+      {/* Balance type info banner */}
+      {txType === "balance" && (
+        <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 px-4 py-2.5 text-xs text-orange-700 dark:text-orange-300">
+          📒{" "}
+          {language === "gu"
+            ? 'બાકી: ઉધાર એન્ટ્રી. Party ની વિગત જરૂરી છે. જે રકમ ભરે તે "આ વખત ભરવું" માં નાખો.'
+            : "Baki: Udhar entry. Party details required. Enter partial payment if party is paying some amount now."}
+        </div>
+      )}
+
       {/* Party Search Dropdown */}
       <div ref={dropdownRef}>
-        <p className={labelClass}>{t.customerName} *</p>
+        <p className={labelClass}>
+          {t.customerName}{" "}
+          {txType === "advance" ? (
+            <span className="text-muted-foreground font-normal text-xs">
+              ({language === "gu" ? "વૈકલ્પિક" : "optional"})
+            </span>
+          ) : (
+            <span className="text-red-500">*</span>
+          )}
+        </p>
         <div className="relative">
           <div
             className={`flex items-center border rounded-xl px-3 py-3 bg-background gap-2 ${
@@ -508,7 +637,13 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
               }}
               onFocus={() => setShowDropdown(true)}
               placeholder={
-                language === "gu" ? "ગ્રાહક શોધો..." : "Search party..."
+                txType === "advance"
+                  ? language === "gu"
+                    ? "ગ્રાહક શોધો (વૈકલ્પિક)"
+                    : "Search party (optional)"
+                  : language === "gu"
+                    ? "ગ્રાહક શોધો..."
+                    : "Search party..."
               }
               data-ocid="new_transaction.party_search.input"
             />
@@ -521,7 +656,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
             )}
           </div>
 
-          {/* Selected party badge */}
           {selectedParty && (
             <div className="mt-1.5 flex items-center gap-1.5">
               <span className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
@@ -536,7 +670,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
             </div>
           )}
 
-          {/* Dropdown */}
           {showDropdown && (
             <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
               {filteredParties.length > 0 ? (
@@ -569,8 +702,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
                   {language === "gu" ? "કોઈ પાર્ટી મળી નહીં" : "No party found"}
                 </div>
               )}
-
-              {/* Add new party option */}
               <button
                 type="button"
                 onClick={() => {
@@ -588,7 +719,6 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
           )}
         </div>
 
-        {/* Inline Add New Party Form */}
         {showAddNew && (
           <div className="mt-3 bg-card border border-primary/30 rounded-xl p-4 space-y-3">
             <p className="text-sm font-bold text-foreground">
@@ -635,15 +765,32 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         )}
       </div>
 
-      {/* Mobile Number */}
+      {/* Mobile Number -- shown for both but optional for advance */}
       <div>
-        <p className={labelClass}>{t.mobile} *</p>
+        <p className={labelClass}>
+          {t.mobile}{" "}
+          {txType === "advance" ? (
+            <span className="text-muted-foreground font-normal text-xs">
+              ({language === "gu" ? "વૈકલ્પિક" : "optional"})
+            </span>
+          ) : (
+            <span className="text-red-500">*</span>
+          )}
+        </p>
         <input
           type="tel"
           className={inputClass}
           value={mobileNumber}
           onChange={(e) => setMobileNumber(e.target.value)}
-          placeholder={language === "gu" ? "મોબાઇલ નંબર *" : "Mobile number *"}
+          placeholder={
+            txType === "advance"
+              ? language === "gu"
+                ? "મોબાઇલ નંબર (વૈકલ્પિક)"
+                : "Mobile number (optional)"
+              : language === "gu"
+                ? "મોબાઇલ નંબર *"
+                : "Mobile number *"
+          }
           data-ocid="new_transaction.mobile.input"
         />
       </div>
@@ -765,24 +912,49 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         />
       </div>
 
-      {/* Advance Amount */}
-      <div>
-        <p className={labelClass}>{t.advanceAmount}</p>
-        <input
-          type="number"
-          min="0"
-          className={inputClass}
-          value={advanceAmount || ""}
-          onChange={(e) =>
-            setAdvanceAmount(Math.max(0, Number(e.target.value)))
-          }
-          placeholder="0"
-          data-ocid="new_transaction.advance_amount.input"
-        />
-      </div>
+      {/* Advance Amount -- only for advance type */}
+      {txType === "advance" && (
+        <div>
+          <p className={labelClass}>{t.advanceAmount}</p>
+          <input
+            type="number"
+            min="0"
+            className={inputClass}
+            value={advanceAmount || ""}
+            onChange={(e) =>
+              setAdvanceAmount(Math.max(0, Number(e.target.value)))
+            }
+            placeholder="0"
+            data-ocid="new_transaction.advance_amount.input"
+          />
+        </div>
+      )}
 
-      {/* Baki Summary */}
-      {finalAmount > 0 && (
+      {/* Partial Payment -- only for balance type */}
+      {txType === "balance" && (
+        <div>
+          <p className={labelClass}>
+            {language === "gu" ? "આ વખત ભરવું" : "Paying Now (Partial)"}{" "}
+            <span className="text-muted-foreground font-normal text-xs">
+              ({language === "gu" ? "વૈકલ્પિક" : "optional"})
+            </span>
+          </p>
+          <input
+            type="number"
+            min="0"
+            className={inputClass}
+            value={partialPayment || ""}
+            onChange={(e) =>
+              setPartialPayment(Math.max(0, Number(e.target.value)))
+            }
+            placeholder="0"
+            data-ocid="new_transaction.partial_payment.input"
+          />
+        </div>
+      )}
+
+      {/* Summary */}
+      {finalAmount > 0 && txType === "advance" && (
         <div className="rounded-xl px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
@@ -820,27 +992,112 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         </div>
       )}
 
-      {/* Payment Mode */}
-      <div>
-        <p className={labelClass}>{t.paymentMode}</p>
-        <div className="flex gap-3">
-          {["cash", "upi"].map((pm) => (
-            <button
-              type="button"
-              key={pm}
-              onClick={() => setPaymentMode(pm)}
-              data-ocid={`new_transaction.${pm}.toggle`}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${
-                paymentMode === pm
-                  ? "border-primary bg-accent text-accent-foreground"
-                  : "border-border text-muted-foreground bg-background"
-              }`}
-            >
-              {pm === "cash" ? `💵 ${t.cash}` : `📱 ${t.upi}`}
-            </button>
-          ))}
+      {/* Udhar Summary for balance type */}
+      {finalAmount > 0 && txType === "balance" && (
+        <div className="rounded-xl px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">{t.totalAmount}</span>
+              <span className="font-semibold">₹{finalAmount.toFixed(2)}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  {t.discountAmount}
+                </span>
+                <span className="font-semibold text-red-600">
+                  -₹{discountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {partialPayment > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  {language === "gu" ? "આ વખત ભર્યા" : "Paying Now"}
+                </span>
+                <span className="font-semibold text-blue-600">
+                  -₹{partialPayment.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-orange-200 dark:border-orange-700 pt-1 mt-1">
+              <span className="font-bold text-orange-700 dark:text-orange-400">
+                📒 {language === "gu" ? "ઉધાર (બાકી)" : "Udhar (Balance Due)"}
+              </span>
+              <span className="font-bold text-orange-700 dark:text-orange-400">
+                ₹{udharAmount.toFixed(2)}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Payment Mode -- ONLY for advance type */}
+      {txType === "advance" && (
+        <div>
+          <p className={labelClass}>{t.paymentMode}</p>
+          <div className="flex gap-2">
+            {(["cash", "upi", "split"] as const).map((pm) => (
+              <button
+                type="button"
+                key={pm}
+                onClick={() => setPaymentMode(pm)}
+                data-ocid={`new_transaction.${pm}.toggle`}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${
+                  paymentMode === pm
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "border-border text-muted-foreground bg-background"
+                }`}
+              >
+                {pm === "cash"
+                  ? `💵 ${t.cash}`
+                  : pm === "upi"
+                    ? `📱 ${t.upi}`
+                    : `🔀 ${language === "gu" ? "સ્પ્લિટ" : "Split"}`}
+              </button>
+            ))}
+          </div>
+          {/* Split inputs */}
+          {paymentMode === "split" && (
+            <div className="mt-3 space-y-2">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">
+                    {language === "gu" ? "💵 કેશ રકમ" : "💵 Cash Amount"}
+                  </p>
+                  <input
+                    className="w-full border border-border rounded-xl px-3 py-2.5 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    type="number"
+                    min={0}
+                    value={cashSplit || ""}
+                    placeholder="0"
+                    onChange={(e) => setCashSplit(Number(e.target.value) || 0)}
+                    data-ocid="new_transaction.cash_split.input"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">
+                    {language === "gu" ? "📱 UPI રકમ" : "📱 UPI Amount"}
+                  </p>
+                  <input
+                    className="w-full border border-border rounded-xl px-3 py-2.5 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    type="number"
+                    min={0}
+                    value={upiSplit || ""}
+                    placeholder="0"
+                    onChange={(e) => setUpiSplit(Number(e.target.value) || 0)}
+                    data-ocid="new_transaction.upi_split.input"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-right">
+                {language === "gu" ? "કુલ" : "Total"}: ₹
+                {(cashSplit + upiSplit).toLocaleString()}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Date */}
       <div>
@@ -864,7 +1121,7 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
       >
         {saving ? t.loading : t.save}
       </button>
-      {/* Voice Review Modal */}
+
       <VoiceReview
         open={voiceReviewOpen}
         parsed={parsedVoice}
