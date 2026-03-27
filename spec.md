@@ -1,36 +1,32 @@
 # KisanTractor Pro
 
 ## Current State
-
-- App has Bookings, NewBooking, and BookingDetail screens already in codebase
-- NewBooking has unnecessary fields: village, tractorId, driverId, notes, paymentMode
-- BookingDetail has Mark Ongoing/Complete but no "Complete Karo" that opens NewTransaction with auto-fill
-- NewTransaction does NOT accept prefill props
-- Bookings accessible from side drawer only
+- DriverLoginScreen.tsx exists and may be referenced in routing
+- Drivers screen allows owner to add/delete drivers
+- NewTransaction.tsx has no tractor or driver selection fields
+- App.tsx has no route/screen for driver login
 
 ## Requested Changes (Diff)
 
 ### Add
-- "Complete Karo" button on each pending/ongoing booking card
-- NewTransaction accepts optional prefill props: partyName, mobile, workType, bookingId
-- When Complete Karo tapped: navigate to NewTransaction with party+service pre-filled
-- After transaction saved from booking, mark booking as "completed" in backend
-- Bookings in bottom action bar (third button with calendar icon)
+- Tractor select dropdown (optional) in NewTransaction form
+- Driver select dropdown (optional) in NewTransaction form
+- Both fields show saved tractors/drivers from backend
 
 ### Modify
-- NewBooking form: remove village, tractorId, driverId, paymentMode, notes. Keep: party (live search from saved parties), mobile, service, date/time
-- Bookings list: remove village display, show party name, service, date/time, status badge
-- App.tsx: add bookingPrefill state, pass onComplete to Bookings, route to NewTransaction with prefill
-- BookingDetail: add "Complete Karo (Transaction Banao)" button
+- Remove DriverLoginScreen from the codebase (it is unused in App.tsx routing already, just delete the file and any imports)
+- Drivers screen: confirm no driver login flow remains, owner manages driver details directly
+- NewTransaction: after Service field, add optional Tractor field (dropdown from getAllTractors) and optional Driver field (dropdown from getAllDrivers)
 
 ### Remove
-- Village, tractor, driver, paymentMode, notes fields from NewBooking
-- Village from Bookings list display
+- DriverLoginScreen.tsx file
+- DriverView.tsx if it references driver login
+- Any store fields related to driver login (loggedInDriverId, authRole driver logic)
 
 ## Implementation Plan
-
-1. NewTransaction.tsx: Add optional prefill prop + onBookingCompleted callback
-2. NewBooking.tsx: Simplify form (party search, mobile, service, date/time only)
-3. Bookings.tsx: Add onComplete prop, add Complete Karo button on pending/ongoing bookings
-4. App.tsx: Add bookingPrefill state, pass onComplete callback, add Bookings to bottom action bar
-5. BookingDetail.tsx: Replace old status flow with single Complete Karo button
+1. Delete DriverLoginScreen.tsx and DriverView.tsx
+2. Remove driver login references from store.ts (loggedInDriverId, setLoggedInDriverId, authRole)
+3. In NewTransaction.tsx, add optional tractor select and driver select dropdowns after Service field
+4. Load tractors with getAllTractors() and drivers with getAllDrivers() in NewTransaction
+5. Pass selectedTractorId and selectedDriverId in the createBooking call
+6. Validate - no typecheck errors

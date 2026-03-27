@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Party } from "../backend.d";
+import type { Driver, Party, Tractor } from "../backend.d";
 import VoiceReview from "../components/VoiceReview";
 import { useActor } from "../hooks/useActor";
 import { useVoiceInput } from "../hooks/useVoiceInput";
@@ -80,6 +80,12 @@ export default function NewTransaction({
     typeof parseVoiceTransaction
   > | null>(null);
   const [savedTx, setSavedTx] = useState<SavedTxInfo | null>(null);
+  const [tractors, setTractors] = useState<Tractor[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [selectedTractorId, setSelectedTractorId] = useState<bigint | null>(
+    null,
+  );
+  const [selectedDriverId, setSelectedDriverId] = useState<bigint | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +182,16 @@ export default function NewTransaction({
   useEffect(() => {
     loadParties();
   }, [loadParties]);
+
+  useEffect(() => {
+    if (!actor) return;
+    Promise.all([actor.getAllTractors(), actor.getAllDrivers()])
+      .then(([tracs, drivs]) => {
+        setTractors(tracs);
+        setDrivers(drivs);
+      })
+      .catch(console.error);
+  }, [actor]);
 
   // Apply prefill when provided (from booking completion)
   useEffect(() => {
@@ -319,8 +335,8 @@ export default function NewTransaction({
         village: "",
         workType,
         date: BigInt(new Date(date).getTime()),
-        tractorId: BigInt(0),
-        driverId: BigInt(0),
+        tractorId: selectedTractorId ?? BigInt(0),
+        driverId: selectedDriverId ?? BigInt(0),
         status: txType === "advance" ? "pending" : "completed",
         hoursWorked: durationHours,
         acresWorked: 0,
@@ -807,6 +823,57 @@ export default function NewTransaction({
           {services.map((svc) => (
             <option key={svc} value={svc}>
               {svc}
+            </option>
+          ))}
+        </select>
+      </div>
+      {/* Tractor Optional */}
+      <div>
+        <p className={labelClass}>
+          {language === "gu" ? "ट्रेक्टर (वैकल्पिक)" : "Tractor (Optional)"}
+        </p>
+        <select
+          className={inputClass}
+          value={selectedTractorId !== null ? selectedTractorId.toString() : ""}
+          onChange={(e) =>
+            setSelectedTractorId(e.target.value ? BigInt(e.target.value) : null)
+          }
+          data-ocid="new_transaction.tractor.select"
+        >
+          <option value="">
+            {language === "gu"
+              ? "-- ट्रेक्टर पसंद करो (वैकल्पिक) --"
+              : "-- Select Tractor (Optional) --"}
+          </option>
+          {tractors.map((tr) => (
+            <option key={tr.id.toString()} value={tr.id.toString()}>
+              {tr.name} ({tr.number})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Driver Optional */}
+      <div>
+        <p className={labelClass}>
+          {language === "gu" ? "ड्राइवर (वैकल्पिक)" : "Driver (Optional)"}
+        </p>
+        <select
+          className={inputClass}
+          value={selectedDriverId !== null ? selectedDriverId.toString() : ""}
+          onChange={(e) =>
+            setSelectedDriverId(e.target.value ? BigInt(e.target.value) : null)
+          }
+          data-ocid="new_transaction.driver.select"
+        >
+          <option value="">
+            {language === "gu"
+              ? "-- ड्राइवर पसंद करो (वैकल्पिक) --"
+              : "-- Select Driver (Optional) --"}
+          </option>
+          {drivers.map((dr) => (
+            <option key={dr.id.toString()} value={dr.id.toString()}>
+              {dr.name} ({dr.phone})
             </option>
           ))}
         </select>
