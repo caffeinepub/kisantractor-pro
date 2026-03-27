@@ -2,15 +2,20 @@ import {
   ArrowLeft,
   Calculator,
   ChevronDown,
+  Mic,
+  MicOff,
   Plus,
   Search,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Party } from "../backend.d";
+import VoiceReview from "../components/VoiceReview";
 import { useActor } from "../hooks/useActor";
+import { useVoiceInput } from "../hooks/useVoiceInput";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { parseVoiceTransaction } from "../utils/parseVoiceTransaction";
 
 interface Props {
   onBack: () => void;
@@ -55,9 +60,83 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
   const [paymentMode, setPaymentMode] = useState("cash");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
   const [saving, setSaving] = useState(false);
+  const [voiceReviewOpen, setVoiceReviewOpen] = useState(false);
+  const [parsedVoice, setParsedVoice] = useState<ReturnType<
+    typeof parseVoiceTransaction
+  > | null>(null);
   const [savedTx, setSavedTx] = useState<SavedTxInfo | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const voiceLang = language === "gu" ? "gu-IN" : "en-IN";
+  const {
+    isListening,
+    startListening,
+    stopListening,
+    isSupported: voiceSupported,
+  } = useVoiceInput({
+    language: voiceLang,
+    onResult: (transcript) => {
+      const voiceServices = services.map((name) => ({
+        name,
+        perHour: serviceRates[name]?.perHour ?? 0,
+        perMinute: serviceRates[name]?.perMinute ?? 0,
+      }));
+      const result = parseVoiceTransaction(transcript, parties, voiceServices);
+      setParsedVoice(result);
+      setVoiceReviewOpen(true);
+    },
+  });
+
+  const handleMicClick = () => {
+    if (!voiceSupported) {
+      alert(
+        language === "gu"
+          ? "આ ઉપકરણ પર વૉઇસ ઇનપુટ સપોર્ટ નથી"
+          : "Voice input not supported on this device",
+      );
+      return;
+    }
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  const handleVoiceConfirm = (data: {
+    partyName: string;
+    partyId?: string;
+    serviceName: string;
+    hours: number;
+    minutes: number;
+    amount: number;
+  }) => {
+    // Pre-fill party
+    if (data.partyId) {
+      const p = parties.find((pa) => pa.id.toString() === data.partyId);
+      if (p) {
+        setSelectedParty(p);
+        setPartySearch(p.name);
+        setMobileNumber(p.phone ?? "");
+      }
+    } else {
+      setPartySearch(data.partyName);
+      setSelectedParty(null);
+    }
+    // Pre-fill service
+    if (data.serviceName && services.includes(data.serviceName)) {
+      setWorkType(data.serviceName);
+    }
+    // Pre-fill hours/minutes
+    setDurationHours(data.hours);
+    setDurationMinutes(data.minutes);
+    // Pre-fill amount if given and no rate
+    if (data.amount > 0 && !serviceRates[data.serviceName]) {
+      setManualAmount(String(data.amount));
+    }
+    setVoiceReviewOpen(false);
+  };
 
   const rates = serviceRates[workType];
   const computedAmount = rates
@@ -347,9 +426,32 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
         >
           <ArrowLeft size={22} className="text-foreground" />
         </button>
-        <h1 className="text-xl font-bold text-foreground">
+        <h1 className="text-xl font-bold text-foreground flex-1">
           {t.newTransaction}
         </h1>
+        {/* Voice Input Button */}
+        <button
+          type="button"
+          onClick={handleMicClick}
+          data-ocid="new_transaction.voice_input.button"
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold text-sm transition-all ${
+            isListening
+              ? "bg-red-500 text-white animate-pulse shadow-lg"
+              : "bg-primary/10 text-primary hover:bg-primary/20"
+          }`}
+          title={language === "gu" ? t.voiceInput : t.voiceInput}
+        >
+          {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          <span className="hidden sm:inline">
+            {isListening
+              ? language === "gu"
+                ? "સાંભળી રહ્યો..."
+                : "Listening..."
+              : language === "gu"
+                ? "વૉઇસ"
+                : "Voice"}
+          </span>
+        </button>
       </div>
 
       {/* Transaction Type */}
@@ -762,6 +864,17 @@ export default function NewTransaction({ onBack, onSaved }: Props) {
       >
         {saving ? t.loading : t.save}
       </button>
+      {/* Voice Review Modal */}
+      <VoiceReview
+        open={voiceReviewOpen}
+        parsed={parsedVoice}
+        parties={parties}
+        services={services}
+        serviceRates={serviceRates}
+        language={language}
+        onConfirm={handleVoiceConfirm}
+        onClose={() => setVoiceReviewOpen(false)}
+      />
     </div>
   );
 }

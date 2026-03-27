@@ -176,6 +176,13 @@ export const translations = {
     wrongMobile: "ખોટો મોબાઇલ નંબર",
     mobileNotSet: "પહેલાં Settings માં મોબાઇલ નંબર સેટ કરો",
     mobileSaved: "મોબાઇલ નંબર સાચવ્યો!",
+    voiceInput: "વૉઇસ ઇનપુટ",
+    listening: "સાંભળી રહ્યો છું...",
+    voiceReview: "વૉઇસ ઇનપુટ તપાસો",
+    confirmSave: "પુષ્ટિ કરો અને સાચવો",
+    voiceNotSupported: "આ ઉપકરણ પર વૉઇસ ઇનપુટ સપોર્ટ નથી",
+    tapMicToSpeak: "માઇક દબાવો અને બોલો",
+    parsedResult: "પ્રાપ્ત ડેટા",
   },
   en: {
     appName: "Kisan Tractor Service",
@@ -354,6 +361,13 @@ export const translations = {
     wrongMobile: "Wrong Mobile Number",
     mobileNotSet: "Please set mobile number in Settings first",
     mobileSaved: "Mobile number saved!",
+    voiceInput: "Voice Input",
+    listening: "Listening...",
+    voiceReview: "Review Voice Input",
+    confirmSave: "Confirm & Save",
+    voiceNotSupported: "Voice input not supported on this device",
+    tapMicToSpeak: "Tap mic and speak",
+    parsedResult: "Parsed Result",
   },
 };
 
