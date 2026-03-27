@@ -320,171 +320,193 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
         </div>
       )}
 
-      {/* ---- VERTICAL SECTIONS ---- */}
-
-      {/* 1. Party Due Payments (Pending Udhar) */}
-      <div className="mx-4 mt-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-bold text-foreground">
-            {language === "gu" ? "💰 પેન્ડિંગ ઉધાર" : "💰 Pending Due Payments"}
-          </h2>
-          <button
-            type="button"
-            onClick={() => onNavigate("credits")}
-            className="text-xs text-primary font-semibold"
+      {/* ---- HORIZONTAL CARD ROW ---- */}
+      <div className="px-4 mt-5">
+        <div
+          className="flex gap-3 overflow-x-auto pb-2"
+          style={{ scrollSnapType: "x mandatory" }}
+        >
+          {/* Card 1: Pending Due Payments */}
+          <div
+            className="bg-card rounded-xl border border-border shadow-card flex flex-col flex-shrink-0"
+            style={{ minWidth: 260, scrollSnapAlign: "start" }}
           >
-            {language === "gu" ? "બધું જુઓ" : "View All"}
-          </button>
-        </div>
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          {pendingCredits.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {language === "gu"
-                  ? "કોઈ પેન્ડિંગ ઉધાર નથી"
-                  : "No pending due payments"}
-              </p>
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
+              <h2 className="text-sm font-bold text-foreground">
+                {language === "gu" ? "👥 પાર્ટી" : "👥 Party"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => onNavigate("credits")}
+                className="text-xs text-primary font-semibold"
+              >
+                {language === "gu" ? "બધું જુઓ" : "View All"}
+              </button>
             </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {pendingCredits.map((c) => {
-                const due = c.totalDue - c.amountPaid;
-                return (
-                  <div
-                    key={Number(c.id)}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
-                    <div className="flex-1">
-                      <p className="font-bold text-foreground text-sm">
-                        {c.customerName}
-                      </p>
-                      {c.mobile ? (
-                        <p className="text-xs text-muted-foreground">
-                          {c.mobile}
+            <div className="overflow-y-auto" style={{ maxHeight: 192 }}>
+              {pendingCredits.length === 0 ? (
+                <div
+                  className="py-6 text-center"
+                  data-ocid="dashboard.empty_state"
+                >
+                  <p className="text-xs text-muted-foreground px-3">
+                    {language === "gu"
+                      ? "કોઈ પેન્ડિંગ ઉધાર નથી"
+                      : "No pending due payments"}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {pendingCredits.map((c) => {
+                    const due = c.totalDue - c.amountPaid;
+                    return (
+                      <div
+                        key={Number(c.id)}
+                        className="flex items-center justify-between px-4 py-2.5"
+                      >
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="font-bold text-foreground text-xs truncate">
+                            {c.customerName}
+                          </p>
+                          {c.mobile ? (
+                            <p className="text-xs text-muted-foreground">
+                              {c.mobile}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-sm font-bold text-destructive">
+                            ₹{due.toLocaleString()}
+                          </span>
+                          {c.mobile ? (
+                            <a
+                              href={`tel:${c.mobile}`}
+                              className="flex items-center gap-0.5 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full"
+                            >
+                              <PhoneCall size={9} />
+                              {t.call}
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Today's Work */}
+          <div
+            className="bg-card rounded-xl border border-border shadow-card flex flex-col flex-shrink-0"
+            style={{ minWidth: 260, scrollSnapAlign: "start" }}
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
+              <h2 className="text-sm font-bold text-foreground">
+                {language === "gu" ? "🚜 આજનું કામ" : "🚜 Today's Work"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => onNavigate("bookings")}
+                className="text-xs text-primary font-semibold"
+              >
+                {language === "gu" ? "બધું જુઓ" : "View All"}
+              </button>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: 192 }}>
+              {todayBookings.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-xs text-muted-foreground px-3">
+                    {t.noBookings}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {todayBookings.map((b, idx) => (
+                    <div
+                      key={Number(b.id)}
+                      className="flex items-center justify-between px-4 py-2.5"
+                      data-ocid={`dashboard.item.${idx + 1}`}
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 text-left min-w-0 mr-2"
+                        onClick={() => onBookingTap(b)}
+                      >
+                        <p className="font-bold text-foreground text-xs truncate">
+                          {b.customerName}
                         </p>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-bold text-destructive">
-                        ₹{due.toLocaleString()}
-                      </span>
-                      {c.mobile ? (
-                        <a
-                          href={`tel:${c.mobile}`}
-                          className="flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full"
+                        <p className="text-xs text-muted-foreground truncate">
+                          {b.workType}
+                        </p>
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded-full mt-0.5 inline-block font-medium ${statusColor(b.status)}`}
                         >
-                          <PhoneCall size={10} />
+                          {statusLabel(b.status)}
+                        </span>
+                      </button>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <p className="font-bold text-primary text-xs">
+                          ₹{b.finalAmount.toLocaleString()}
+                        </p>
+                        <a
+                          href={`tel:${b.mobile}`}
+                          className="flex items-center gap-0.5 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full"
+                        >
+                          <PhoneCall size={9} />
                           {t.call}
                         </a>
-                      ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Today's Work */}
-      <div className="mx-4 mt-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-bold text-foreground">
-            {language === "gu" ? "🚜 આજનું કામ" : "🚜 Today's Work"}
-          </h2>
-          <button
-            type="button"
-            onClick={() => onNavigate("bookings")}
-            className="text-xs text-primary font-semibold"
-          >
-            {language === "gu" ? "બધું જુઓ" : "View All"}
-          </button>
-        </div>
-
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          {todayBookings.length === 0 ? (
-            <div className="py-8 text-center" data-ocid="dashboard.empty_state">
-              <p className="text-sm text-muted-foreground">{t.noBookings}</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {todayBookings.map((b, idx) => (
-                <div
-                  key={Number(b.id)}
-                  className="flex items-center justify-between px-4 py-3"
-                  data-ocid={`dashboard.item.${idx + 1}`}
-                >
-                  <button
-                    type="button"
-                    className="flex-1 text-left"
-                    onClick={() => onBookingTap(b)}
-                  >
-                    <p className="font-bold text-foreground text-sm">
-                      {b.customerName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.workType}
-                    </p>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block font-medium ${statusColor(b.status)}`}
-                    >
-                      {statusLabel(b.status)}
-                    </span>
-                  </button>
-                  <div className="flex flex-col items-end gap-1">
-                    <p className="font-bold text-primary text-sm">
-                      ₹{b.finalAmount.toLocaleString()}
-                    </p>
-                    <a
-                      href={`tel:${b.mobile}`}
-                      className="flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full"
-                    >
-                      <PhoneCall size={10} />
-                      {t.call}
-                    </a>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* 3. Services */}
-      <div className="mx-4 mt-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-bold text-foreground">
-            {language === "gu" ? "⚙️ સેવાઓ" : "⚙️ Services"}
-          </h2>
-          <button
-            type="button"
-            onClick={() => onNavigate("settings")}
-            className="text-xs text-primary font-semibold"
+          {/* Card 3: Services */}
+          <div
+            className="bg-card rounded-xl border border-border shadow-card flex flex-col flex-shrink-0"
+            style={{ minWidth: 240, scrollSnapAlign: "start" }}
           >
-            {language === "gu" ? "મેનેજ કરો" : "Manage"}
-          </button>
-        </div>
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          {services.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {language === "gu"
-                  ? "કોઈ સેવા ઉમેરવામાં નથી"
-                  : "No services added yet"}
-              </p>
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
+              <h2 className="text-sm font-bold text-foreground">
+                {language === "gu" ? "⚙️ સેવાઓ" : "⚙️ Services"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => onNavigate("settings")}
+                className="text-xs text-primary font-semibold"
+              >
+                {language === "gu" ? "મેનેજ કરો" : "Manage"}
+              </button>
             </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {services.map((svc) => (
-                <div key={svc} className="flex items-center gap-3 px-4 py-3">
-                  <span className="text-lg">🔧</span>
-                  <span className="text-sm font-medium text-foreground">
-                    {svc}
-                  </span>
+            <div className="overflow-y-auto" style={{ maxHeight: 192 }}>
+              {services.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-xs text-muted-foreground px-3">
+                    {language === "gu"
+                      ? "કોઈ સેવા ઉમેરવામાં નથી"
+                      : "No services added yet"}
+                  </p>
                 </div>
-              ))}
+              ) : (
+                <div className="divide-y divide-border">
+                  {services.map((svc) => (
+                    <div
+                      key={svc}
+                      className="flex items-center gap-2.5 px-4 py-2.5"
+                    >
+                      <span className="text-base">🔧</span>
+                      <span className="text-xs font-medium text-foreground">
+                        {svc}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
