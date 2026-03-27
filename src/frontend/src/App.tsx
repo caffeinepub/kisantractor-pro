@@ -13,11 +13,13 @@ import {
   Settings,
   Tractor,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { Booking, Party } from "./backend.d";
+import { useCallback, useEffect, useState } from "react";
+import type { Booking, MaintenanceReminder, Party } from "./backend.d";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useActor } from "./hooks/useActor";
 import { useSettingsSync } from "./hooks/useSettingsSync";
 import { translations } from "./i18n";
 import BookingDetail from "./screens/BookingDetail";
@@ -29,12 +31,14 @@ import Expenses from "./screens/Expenses";
 import Invoice from "./screens/Invoice";
 import NewBooking from "./screens/NewBooking";
 import NewTransaction from "./screens/NewTransaction";
+import Notifications from "./screens/Notifications";
 import Parties from "./screens/Parties";
 import PartyDetail from "./screens/PartyDetail";
 import PaymentIn from "./screens/PaymentIn";
 import Reports from "./screens/Reports";
 import ServiceManagement from "./screens/ServiceManagement";
 import SettingsScreen from "./screens/Settings";
+import TractorMaintenance from "./screens/TractorMaintenance";
 import TractorScreen from "./screens/Tractors";
 import Transactions from "./screens/Transactions";
 import { useAppStore } from "./store";
@@ -45,6 +49,7 @@ export type Screen =
   | "newBooking"
   | "bookingDetail"
   | "tractors"
+  | "tractorMaintenance"
   | "drivers"
   | "expenses"
   | "reports"
@@ -56,7 +61,8 @@ export type Screen =
   | "partyDetail"
   | "transactions"
   | "newTransaction"
-  | "paymentIn";
+  | "paymentIn"
+  | "notifications";
 
 const drawerNavItems = [
   {
@@ -82,6 +88,12 @@ const drawerNavItems = [
     label_en: "Tractors",
     label_gu: "ટ્રેક્ટર",
     icon: Tractor,
+  },
+  {
+    id: "tractorMaintenance" as Screen,
+    label_en: "Tractor Maintenance",
+    label_gu: "ટ્રેક્ટર સર્વિસ",
+    icon: Wrench,
   },
   {
     id: "drivers" as Screen,
@@ -125,19 +137,22 @@ const screenTitles: Record<Screen, { en: string; gu: string }> = {
   paymentIn: { en: "Payment In", gu: "ચૂકવણી લો" },
   newBooking: { en: "Navi Booking", gu: "નવી બુકિંગ" },
   bookingDetail: { en: "Booking Detail", gu: "બુકિંગ વિગત" },
-  invoice: { en: "Invoice", gu: "ઇન્વૉઇસ" },
+  invoice: { en: "Invoice", gu: "ઇન્વ್ઓઇસ" },
   partyDetail: { en: "Party Detail", gu: "પક્ષ વિગત" },
   settings: { en: "Settings", gu: "સેટિંગ" },
   serviceManagement: { en: "Manage Services", gu: "સેવા મેનેજ" },
   tractors: { en: "Tractors", gu: "ટ્રેક્ટર" },
+  tractorMaintenance: { en: "Tractor Maintenance", gu: "ટ્રેક્ટર સર્વિસ" },
   drivers: { en: "Drivers", gu: "ડ્રાઇવર" },
   expenses: { en: "Expenses", gu: "ખર્ચ" },
   credits: { en: "Udhar", gu: "ઉધાર" },
   reports: { en: "Reports", gu: "અહેવાલ" },
+  notifications: { en: "Notifications", gu: "સૂચના" },
 };
 
 export default function App() {
   const { language, darkMode } = useAppStore();
+  const { actor } = useActor();
   useSettingsSync();
   const _t = translations[language];
   const [screen, setScreen] = useState<Screen>("dashboard");
@@ -156,6 +171,7 @@ export default function App() {
   );
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(businessName);
+  const [notifBadge, setNotifBadge] = useState(0);
 
   useEffect(() => {
     if (darkMode) {
@@ -164,6 +180,36 @@ export default function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
+
+  // Compute notification badge count
+  const computeBadge = useCallback(async () => {
+    try {
+      const now = Date.now();
+      // Payment reminders
+      const pr = JSON.parse(
+        localStorage.getItem("kisan_payment_reminders") || "[]",
+      ) as Array<{ isDone: boolean; dueDate: number }>;
+      const pendingPay = pr.filter((r) => !r.isDone).length;
+      // Maintenance reminders
+      let overdueMain = 0;
+      if (actor) {
+        const rem =
+          (await actor.getAllMaintenanceReminders()) as MaintenanceReminder[];
+        overdueMain = rem.filter(
+          (r) => !r.isDone && Number(r.dueDate) < now,
+        ).length;
+      }
+      setNotifBadge(pendingPay + overdueMain);
+    } catch {
+      // ignore
+    }
+  }, [actor]);
+
+  useEffect(() => {
+    computeBadge();
+    const interval = setInterval(computeBadge, 60000);
+    return () => clearInterval(interval);
+  }, [computeBadge]);
 
   const saveBusinessName = (name: string) => {
     localStorage.setItem("businessName", name);
@@ -197,6 +243,7 @@ export default function App() {
   const navigateTo = (s: Screen) => {
     setScreen(s);
     setDrawerOpen(false);
+    if (s === "notifications") setTimeout(computeBadge, 500);
   };
 
   const handleHeaderBack = () => {
@@ -225,10 +272,12 @@ export default function App() {
         break;
       case "settings":
       case "tractors":
+      case "tractorMaintenance":
       case "drivers":
       case "expenses":
       case "credits":
       case "reports":
+      case "notifications":
         setScreen("dashboard");
         break;
       default:
@@ -283,7 +332,10 @@ export default function App() {
             </div>
 
             {/* Drawer Items */}
-            <nav className="py-3">
+            <nav
+              className="py-3 overflow-y-auto"
+              style={{ maxHeight: "calc(100% - 160px)" }}
+            >
               {drawerNavItems.map((item) => {
                 const Icon = item.icon;
                 const active = screen === item.id;
@@ -339,10 +391,32 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="w-full flex items-center gap-4 px-5 py-3.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+                onClick={() => {
+                  navigateTo("notifications");
+                  setDrawerOpen(false);
+                }}
+                className={`w-full flex items-center gap-4 px-5 py-3.5 text-sm font-semibold transition-colors ${
+                  screen === "notifications"
+                    ? "bg-accent text-accent-foreground border-r-4 border-primary"
+                    : "text-foreground hover:bg-muted"
+                }`}
                 data-ocid="nav.notifications.link"
               >
-                <Bell size={20} className="text-muted-foreground" />
+                <div className="relative">
+                  <Bell
+                    size={20}
+                    className={
+                      screen === "notifications"
+                        ? "text-primary"
+                        : "text-muted-foreground"
+                    }
+                  />
+                  {notifBadge > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      {notifBadge > 9 ? "9+" : notifBadge}
+                    </span>
+                  )}
+                </div>
                 {language === "gu" ? "સૂચના" : "Notifications"}
               </button>
             </div>
@@ -497,6 +571,7 @@ export default function App() {
               />
             )}
             {screen === "tractors" && <TractorScreen />}
+            {screen === "tractorMaintenance" && <TractorMaintenance />}
             {screen === "drivers" && <Drivers />}
             {screen === "expenses" && <Expenses />}
             {screen === "reports" && <Reports onNavigate={setScreen} />}
@@ -523,6 +598,7 @@ export default function App() {
                 onBack={() => setScreen("bookingDetail")}
               />
             )}
+            {screen === "notifications" && <Notifications />}
           </main>
 
           {/* Vyapar-style Bottom Action Bar */}

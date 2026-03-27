@@ -18,6 +18,25 @@ interface Props {
   onNavigate: (screen: Screen) => void;
 }
 
+function LiveClock({ language }: { language: string }) {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <p className="text-2xl font-bold text-foreground tabular-nums">
+      {time.toLocaleTimeString(language === "gu" ? "gu-IN" : "en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })}
+    </p>
+  );
+}
+
 export default function Dashboard({ onBookingTap, onNavigate }: Props) {
   const { actor } = useActor();
   const { language } = useAppStore();
@@ -120,9 +139,9 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
 
   return (
     <div className="pb-4">
-      {/* Date */}
+      {/* Date + Live Clock */}
       <div className="px-4 pt-4 pb-2">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-lg font-semibold text-foreground">
           {new Date().toLocaleDateString(
             language === "gu" ? "gu-IN" : "en-IN",
             {
@@ -132,6 +151,7 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
             },
           )}
         </p>
+        <LiveClock language={language} />
       </div>
 
       {/* Summary Cards - Horizontal Scroll */}
