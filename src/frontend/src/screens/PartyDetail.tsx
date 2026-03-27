@@ -3,8 +3,10 @@ import {
   BookOpen,
   CheckCircle,
   Clock,
+  CreditCard,
   FileText,
   IndianRupee,
+  Plus,
   Receipt,
   TrendingUp,
   Users,
@@ -30,10 +32,93 @@ type TxEntry = {
   mode: string;
 };
 
+interface Installment {
+  id: string;
+  partyName: string;
+  amount: number;
+  date: string;
+  mode: "cash" | "upi";
+  note: string;
+}
+
+function loadInstallments(partyName: string): Installment[] {
+  try {
+    const all = JSON.parse(
+      localStorage.getItem("kisanInstallments") || "[]",
+    ) as Installment[];
+    return all.filter((i) => i.partyName === partyName);
+  } catch {
+    return [];
+  }
+}
+
+function saveInstallment(inst: Installment) {
+  const all = JSON.parse(
+    localStorage.getItem("kisanInstallments") || "[]",
+  ) as Installment[];
+  all.unshift(inst);
+  localStorage.setItem("kisanInstallments", JSON.stringify(all));
+}
+
+function getCreditLimit(partyName: string): number | null {
+  try {
+    const limits = JSON.parse(
+      localStorage.getItem("kisanCreditLimits") || "{}",
+    ) as Record<string, number>;
+    return limits[partyName] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function setCreditLimit(partyName: string, limit: number | null) {
+  const limits = JSON.parse(
+    localStorage.getItem("kisanCreditLimits") || "{}",
+  ) as Record<string, number>;
+  if (limit === null) {
+    delete limits[partyName];
+  } else {
+    limits[partyName] = limit;
+  }
+  localStorage.setItem("kisanCreditLimits", JSON.stringify(limits));
+}
+
+function getPartyEvents(partyName: string): {
+  birthday?: string;
+  anniversary?: string;
+} {
+  try {
+    const events = JSON.parse(
+      localStorage.getItem("kisanPartyEvents") || "{}",
+    ) as Record<string, { birthday?: string; anniversary?: string }>;
+    return events[partyName] ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function setPartyEvent(
+  partyName: string,
+  field: "birthday" | "anniversary",
+  value: string,
+) {
+  const events = JSON.parse(
+    localStorage.getItem("kisanPartyEvents") || "{}",
+  ) as Record<string, { birthday?: string; anniversary?: string }>;
+  if (!events[partyName]) events[partyName] = {};
+  if (value) {
+    events[partyName][field] = value;
+  } else {
+    delete events[partyName][field];
+  }
+  localStorage.setItem("kisanPartyEvents", JSON.stringify(events));
+}
+
 export default function PartyDetail({ party, onBack }: Props) {
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
+  const isGu = language === "gu";
 
   const [stats, setStats] = useState<PartyStats | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -47,6 +132,30 @@ export default function PartyDetail({ party, onBack }: Props) {
   const businessName =
     localStorage.getItem("businessName") || "KisanTractor Pro";
   const businessLogo = localStorage.getItem("businessLogo") || null;
+
+  // Credit limit
+  const [creditLimit, setCreditLimitState] = useState<number | null>(() =>
+    getCreditLimit(party.name),
+  );
+  const [editingLimit, setEditingLimit] = useState(false);
+  const [limitInput, setLimitInput] = useState("");
+
+  // Installments
+  const [installments, setInstallments] = useState<Installment[]>(() =>
+    loadInstallments(party.name),
+  );
+  const [showInstallForm, setShowInstallForm] = useState(false);
+  const [installAmount, setInstallAmount] = useState("");
+  const [installMode, setInstallMode] = useState<"cash" | "upi">("cash");
+  const [installNote, setInstallNote] = useState("");
+
+  // Birthday / Anniversary
+  const [partyEvents, setPartyEventsState] = useState(() =>
+    getPartyEvents(party.name),
+  );
+  const [editingEvents, setEditingEvents] = useState(false);
+  const [bdayInput, setBdayInput] = useState(partyEvents.birthday || "");
+  const [annivInput, setAnnivInput] = useState(partyEvents.anniversary || "");
 
   const load = useCallback(async () => {
     if (!actor) return;
@@ -84,11 +193,8 @@ export default function PartyDetail({ party, onBack }: Props) {
     return t.pending;
   };
 
-  const formatDate = (ts: bigint) => {
-    return new Date(Number(ts)).toLocaleDateString();
-  };
+  const formatDate = (ts: bigint) => new Date(Number(ts)).toLocaleDateString();
 
-  // Compute all transaction entries from bookings
   const allTransactions: TxEntry[] = [];
   for (const bk of bookings) {
     const bkId = String(bk.id);
@@ -117,6 +223,71 @@ export default function PartyDetail({ party, onBack }: Props) {
       });
     }
   }
+
+  const handleSaveCreditLimit = () => {
+    const val = Number(limitInput);
+    const limit =
+      limitInput.trim() === "" ? null : Number.isNaN(val) ? null : val;
+    setCreditLimit(party.name, limit);
+    setCreditLimitState(limit);
+    setEditingLimit(false);
+    setLimitInput("");
+  };
+
+  const handleAddInstallment = () => {
+    const amt = Number(installAmount);
+    if (!amt || amt <= 0) return;
+    const inst: Installment = {
+      id: String(Date.now()),
+      partyName: party.name,
+      amount: amt,
+      date: new Date().toLocaleDateString(),
+      mode: installMode,
+      note: installNote,
+    };
+    saveInstallment(inst);
+    const updated = [inst, ...installments];
+    setInstallments(updated);
+    setInstallAmount("");
+    setInstallNote("");
+    setShowInstallForm(false);
+    // Also create a payment reminder as done (it's been paid)
+    try {
+      const reminders = JSON.parse(
+        localStorage.getItem("kisan_payment_reminders") || "[]",
+      );
+      const idx = reminders.findIndex(
+        (r: { partyName: string; isDone: boolean }) =>
+          r.partyName === party.name && !r.isDone,
+      );
+      if (idx !== -1) {
+        reminders[idx].amount = Math.max(0, reminders[idx].amount - amt);
+        if (reminders[idx].amount <= 0) reminders[idx].isDone = true;
+        localStorage.setItem(
+          "kisan_payment_reminders",
+          JSON.stringify(reminders),
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleSaveEvents = () => {
+    setPartyEvent(party.name, "birthday", bdayInput);
+    setPartyEvent(party.name, "anniversary", annivInput);
+    setPartyEventsState({
+      birthday: bdayInput || undefined,
+      anniversary: annivInput || undefined,
+    });
+    setEditingEvents(false);
+  };
+
+  const udharBalance = stats?.udharBalance ?? 0;
+  const creditExceeded = creditLimit !== null && udharBalance > creditLimit;
+
+  const inputClass =
+    "w-full border border-border rounded-xl px-3 py-2.5 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm";
 
   if (showStatement) {
     return (
@@ -163,10 +334,10 @@ export default function PartyDetail({ party, onBack }: Props) {
           type="button"
           onClick={() => setShowStatement(true)}
           data-ocid="party_detail.statement.button"
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 text-sm font-semibold hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 text-sm font-semibold"
         >
           <FileText size={16} />
-          {language === "gu" ? "સ્ટેટમેન્ટ" : "Statement"}
+          {isGu ? "સ્ટેટમેન્ટ" : "Statement"}
         </button>
       </div>
 
@@ -179,6 +350,20 @@ export default function PartyDetail({ party, onBack }: Props) {
         </div>
       ) : (
         <>
+          {/* Credit limit warning */}
+          {creditExceeded && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-xl p-3">
+              <p className="text-sm font-bold text-red-700 dark:text-red-300">
+                ⚠️ {isGu ? "ક્રેડિટ લિમિટ નિકળી!" : "Credit Limit Exceeded!"}
+              </p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                {isGu
+                  ? `ઉધાર ₹${udharBalance.toLocaleString()} > લિમિટ ₹${creditLimit?.toLocaleString()}`
+                  : `Udhar ₹${udharBalance.toLocaleString()} > Limit ₹${creditLimit?.toLocaleString()}`}
+              </p>
+            </div>
+          )}
+
           {/* Stats Summary */}
           {stats && (
             <div className="grid grid-cols-3 gap-2">
@@ -210,14 +395,270 @@ export default function PartyDetail({ party, onBack }: Props) {
             </div>
           )}
 
-          {/* Reminder Card */}
+          {/* Credit Limit */}
+          <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard size={16} className="text-blue-600" />
+                <h3 className="font-bold text-gray-800 dark:text-white text-sm">
+                  {isGu ? "ક્રેડિટ લિમિટ" : "Credit Limit"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingLimit(!editingLimit);
+                  setLimitInput(
+                    creditLimit !== null ? String(creditLimit) : "",
+                  );
+                }}
+                data-ocid="party_detail.credit_limit.edit_button"
+                className="text-blue-600 text-xs font-semibold"
+              >
+                {editingLimit
+                  ? isGu
+                    ? "રદ"
+                    : "Cancel"
+                  : isGu
+                    ? "સેટ કરો"
+                    : "Set Limit"}
+              </button>
+            </div>
+            {editingLimit ? (
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  className={inputClass}
+                  placeholder={
+                    isGu
+                      ? "લિમિટ ₹ (0 = કોઈ નહી)"
+                      : "Limit ₹ (blank = no limit)"
+                  }
+                  value={limitInput}
+                  onChange={(e) => setLimitInput(e.target.value)}
+                  data-ocid="party_detail.credit_limit.input"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveCreditLimit}
+                  data-ocid="party_detail.credit_limit.save_button"
+                  className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-sm"
+                >
+                  {t.save}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {creditLimit !== null
+                  ? `₹${creditLimit.toLocaleString()}`
+                  : isGu
+                    ? "લિમિટ સેટ નથી"
+                    : "No limit set"}
+              </p>
+            )}
+          </div>
+
+          {/* Birthday / Anniversary */}
+          <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 dark:text-white text-sm">
+                🎂 {isGu ? "જન્મદિન / વર્ષગાંઠ" : "Birthday / Anniversary"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingEvents(!editingEvents);
+                  setBdayInput(partyEvents.birthday || "");
+                  setAnnivInput(partyEvents.anniversary || "");
+                }}
+                data-ocid="party_detail.events.edit_button"
+                className="text-blue-600 text-xs font-semibold"
+              >
+                {editingEvents
+                  ? isGu
+                    ? "રદ"
+                    : "Cancel"
+                  : isGu
+                    ? "સેટ કરો"
+                    : "Edit"}
+              </button>
+            </div>
+            {editingEvents ? (
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                    {isGu ? "જન્મદિન (MM-DD)" : "Birthday (MM-DD)"}
+                  </span>
+                  <input
+                    type="text"
+                    maxLength={5}
+                    placeholder="MM-DD"
+                    value={bdayInput}
+                    onChange={(e) => setBdayInput(e.target.value)}
+                    className={inputClass}
+                    data-ocid="party_detail.birthday.input"
+                  />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                    {isGu ? "વર્ષગાંઠ (MM-DD)" : "Anniversary (MM-DD)"}
+                  </span>
+                  <input
+                    type="text"
+                    maxLength={5}
+                    placeholder="MM-DD"
+                    value={annivInput}
+                    onChange={(e) => setAnnivInput(e.target.value)}
+                    className={inputClass}
+                    data-ocid="party_detail.anniversary.input"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveEvents}
+                  data-ocid="party_detail.events.save_button"
+                  className="w-full bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm"
+                >
+                  {t.save}
+                </button>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                {partyEvents.birthday && (
+                  <p>
+                    🎂 {isGu ? "જન્મદિન" : "Birthday"}: {partyEvents.birthday}
+                  </p>
+                )}
+                {partyEvents.anniversary && (
+                  <p>
+                    💍 {isGu ? "વર્ષગાંઠ" : "Anniversary"}:{" "}
+                    {partyEvents.anniversary}
+                  </p>
+                )}
+                {!partyEvents.birthday && !partyEvents.anniversary && (
+                  <p className="text-gray-400 dark:text-gray-500 text-xs">
+                    {isGu ? "કોઈ એવેન્ટ સેટ નથી" : "No events set"}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Installment Payments */}
+          {udharBalance > 0 && (
+            <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-800 dark:text-white text-sm">
+                  {isGu ? "હપ્તા ચૂકવણી" : "Installment Payments"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowInstallForm((v) => !v)}
+                  data-ocid="party_detail.installment.open_modal_button"
+                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 rounded-xl text-xs font-bold"
+                >
+                  <Plus size={14} />
+                  {isGu ? "ઉમરો" : "Add"}
+                </button>
+              </div>
+              {showInstallForm && (
+                <div
+                  className="space-y-2 bg-muted rounded-xl p-3"
+                  data-ocid="party_detail.installment.dialog"
+                >
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder={isGu ? "રકમ (₹)" : "Amount (₹)"}
+                    value={installAmount}
+                    onChange={(e) => setInstallAmount(e.target.value)}
+                    className={inputClass}
+                    data-ocid="party_detail.installment.input"
+                  />
+                  <div className="flex gap-2">
+                    {(["cash", "upi"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setInstallMode(m)}
+                        className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 ${
+                          installMode === m
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground"
+                        }`}
+                      >
+                        {m === "cash" ? `💵 ${t.cash}` : `📱 ${t.upi}`}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={isGu ? "નોંધ (વૈકલ્પિક)" : "Note (optional)"}
+                    value={installNote}
+                    onChange={(e) => setInstallNote(e.target.value)}
+                    className={inputClass}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddInstallment}
+                      data-ocid="party_detail.installment.confirm_button"
+                      className="flex-1 bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm"
+                    >
+                      {t.save}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowInstallForm(false)}
+                      data-ocid="party_detail.installment.cancel_button"
+                      className="flex-1 border border-border text-foreground font-bold py-2.5 rounded-xl text-sm"
+                    >
+                      {t.cancel}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {installments.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-semibold uppercase">
+                    {isGu ? "ઇતિહાસ" : "History"}
+                  </p>
+                  {installments.map((inst, i) => (
+                    <div
+                      key={inst.id}
+                      data-ocid={`party_detail.installment.item.${i + 1}`}
+                      className="flex items-center justify-between border border-border rounded-xl px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          ₹{inst.amount.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {inst.date} · {inst.mode.toUpperCase()}
+                        </p>
+                        {inst.note && (
+                          <p className="text-xs text-muted-foreground">
+                            {inst.note}
+                          </p>
+                        )}
+                      </div>
+                      <CheckCircle size={18} className="text-green-500" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payment Reminder */}
           {party.phone && stats && stats.udharBalance > 0 && (
             <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-xl p-3">
               <p className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
-                {language === "gu" ? "ચૂકવણી રિમાઇન્ડર" : "Payment Reminder"}
+                {isGu ? "ચૂકવણી રિમાઇન્ડર" : "Payment Reminder"}
               </p>
               <p className="text-xs text-orange-700 dark:text-orange-400 mb-3">
-                {language === "gu"
+                {isGu
                   ? `બાકી: ₹${stats.udharBalance.toLocaleString()}`
                   : `Pending: ₹${stats.udharBalance.toLocaleString()}`}
               </p>
@@ -254,7 +695,6 @@ export default function PartyDetail({ party, onBack }: Props) {
                 {t.partyHistory}
               </h2>
             </div>
-
             {bookings.length === 0 ? (
               <div
                 className="text-center py-10 text-gray-400"
@@ -310,7 +750,6 @@ export default function PartyDetail({ party, onBack }: Props) {
                 {t.transactionHistory}
               </h2>
             </div>
-
             {allTransactions.length === 0 ? (
               <div
                 className="text-center py-6 text-gray-400"

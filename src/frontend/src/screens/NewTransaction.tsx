@@ -86,6 +86,7 @@ export default function NewTransaction({
     null,
   );
   const [selectedDriverId, setSelectedDriverId] = useState<bigint | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -98,24 +99,110 @@ export default function NewTransaction({
   } = useVoiceInput({
     language: voiceLang,
     onResult: (transcript) => {
-      const voiceServices = services.map((name) => ({
-        name,
-        perHour: serviceRates[name]?.perHour ?? 0,
-        perMinute: serviceRates[name]?.perMinute ?? 0,
+      const parsedServices = services.map((s) => ({
+        name: s,
+        perHour: serviceRates[s]?.perHour,
+        perMinute: serviceRates[s]?.perMinute,
       }));
-      const result = parseVoiceTransaction(transcript, parties, voiceServices);
-      setParsedVoice(result);
+      const parsed = parseVoiceTransaction(transcript, parties, parsedServices);
+      setParsedVoice(parsed);
       setVoiceReviewOpen(true);
     },
   });
 
+  const loadParties = useCallback(async () => {
+    if (!actor) return;
+    const [allParties, allTractors, allDrivers] = await Promise.all([
+      actor.getAllParties(),
+      actor.getAllTractors(),
+      actor.getAllDrivers(),
+    ]);
+    setParties(allParties);
+    setTractors(allTractors);
+    setDrivers(allDrivers);
+  }, [actor]);
+
+  useEffect(() => {
+    loadParties();
+  }, [loadParties]);
+
+  // Apply prefill
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.partyName) setPartySearch(prefill.partyName);
+    if (prefill.mobile) setMobileNumber(prefill.mobile);
+    if (prefill.workType) setWorkType(prefill.workType);
+  }, [prefill]);
+
+  // Select prefilled party from list
+  useEffect(() => {
+    if (prefill?.partyName && parties.length > 0) {
+      const found = parties.find(
+        (p) => p.name.toLowerCase() === prefill.partyName?.toLowerCase(),
+      );
+      if (found) {
+        setSelectedParty(found);
+        setPartySearch(found.name);
+        if (found.phone) setMobileNumber(found.phone);
+      }
+    }
+  }, [prefill, parties]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSelectParty = (party: Party) => {
+    setSelectedParty(party);
+    setPartySearch(party.name);
+    if (party.phone) setMobileNumber(party.phone);
+    setShowDropdown(false);
+    setShowAddNew(false);
+  };
+
+  const handleClearParty = () => {
+    setSelectedParty(null);
+    setPartySearch("");
+    setMobileNumber("");
+  };
+
+  const handleAddNewParty = async () => {
+    if (!actor || !newPartyName.trim()) return;
+    setAddingParty(true);
+    try {
+      await actor.createParty({
+        id: BigInt(0),
+        name: newPartyName.trim(),
+        phone: newPartyPhone.trim(),
+        village: "",
+        createdAt: BigInt(0),
+      });
+      const allParties = await actor.getAllParties();
+      setParties(allParties);
+      const created = allParties.find((p) => p.name === newPartyName.trim());
+      if (created) handleSelectParty(created);
+      setShowAddNew(false);
+      setNewPartyName("");
+      setNewPartyPhone("");
+    } catch (e) {
+      console.error(e);
+    }
+    setAddingParty(false);
+  };
+
   const handleMicClick = () => {
     if (!voiceSupported) {
-      alert(
-        language === "gu"
-          ? "આ ઉપકરણ પર વૉઇસ ઇનપુટ સપોર્ટ નથી"
-          : "Voice input not supported on this device",
-      );
+      alert(t.voiceNotSupported);
       return;
     }
     if (isListening) {
@@ -133,175 +220,52 @@ export default function NewTransaction({
     minutes: number;
     amount: number;
   }) => {
-    if (data.partyId) {
-      const p = parties.find((pa) => pa.id.toString() === data.partyId);
-      if (p) {
-        setSelectedParty(p);
-        setPartySearch(p.name);
-        setMobileNumber(p.phone ?? "");
-      }
-    } else {
+    if (data.partyName) {
       setPartySearch(data.partyName);
-      setSelectedParty(null);
-    }
-    if (data.serviceName && services.includes(data.serviceName)) {
-      setWorkType(data.serviceName);
-    }
-    setDurationHours(data.hours);
-    setDurationMinutes(data.minutes);
-    if (data.amount > 0 && !serviceRates[data.serviceName]) {
-      setManualAmount(String(data.amount));
-    }
-    setVoiceReviewOpen(false);
-  };
-
-  const rates = serviceRates[workType];
-  const computedAmount = rates
-    ? durationHours * rates.perHour + durationMinutes * rates.perMinute
-    : 0;
-  const hasRate = !!rates && computedAmount > 0;
-  const finalAmount =
-    manualAmount !== "" ? Number(manualAmount) : computedAmount;
-  const bakiAmount = Math.max(0, finalAmount - discountAmount - advanceAmount);
-  // For balance type: udhar = total - discount - partial payment
-  const udharAmount = Math.max(
-    0,
-    finalAmount - discountAmount - partialPayment,
-  );
-
-  const loadParties = useCallback(async () => {
-    if (!actor) return;
-    try {
-      const all = await actor.getAllParties();
-      setParties(all);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [actor]);
-
-  useEffect(() => {
-    loadParties();
-  }, [loadParties]);
-
-  useEffect(() => {
-    if (!actor) return;
-    Promise.all([actor.getAllTractors(), actor.getAllDrivers()])
-      .then(([tracs, drivs]) => {
-        setTractors(tracs);
-        setDrivers(drivs);
-      })
-      .catch(console.error);
-  }, [actor]);
-
-  // Apply prefill when provided (from booking completion)
-  useEffect(() => {
-    if (!prefill) return;
-    if (prefill.partyName) setPartySearch(prefill.partyName);
-    if (prefill.mobile) setMobileNumber(prefill.mobile);
-    if (prefill.workType) setWorkType(prefill.workType);
-  }, [prefill]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
+      const found = parties.find(
+        (p) => p.name.toLowerCase() === data.partyName?.toLowerCase(),
+      );
+      if (found) {
+        setSelectedParty(found);
+        if (found.phone) setMobileNumber(found.phone);
       }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+    if (data.serviceName) setWorkType(data.serviceName);
+    if (data.hours !== undefined) setDurationHours(data.hours);
+    if (data.minutes !== undefined) setDurationMinutes(data.minutes);
+    setVoiceReviewOpen(false);
+    setParsedVoice(null);
+  };
 
   const filteredParties = parties.filter((p) =>
     p.name.toLowerCase().includes(partySearch.toLowerCase()),
   );
 
-  const handleSelectParty = (party: Party) => {
-    setSelectedParty(party);
-    setPartySearch(party.name);
-    setMobileNumber(party.phone ?? "");
-    setShowDropdown(false);
-    setShowAddNew(false);
-  };
+  const rates = serviceRates[workType];
+  const computedAmount = rates
+    ? durationHours * (rates.perHour ?? 0) +
+      durationMinutes * (rates.perMinute ?? 0)
+    : 0;
+  const hasRate = !!(rates && (rates.perHour || rates.perMinute));
+  const finalAmount = manualAmount ? Number(manualAmount) : computedAmount;
+  const bakiAmount = Math.max(0, finalAmount - discountAmount - advanceAmount);
+  const udharAmount = Math.max(
+    0,
+    finalAmount - discountAmount - partialPayment,
+  );
 
-  const handleClearParty = () => {
-    setSelectedParty(null);
-    setPartySearch("");
-    setMobileNumber("");
-    setShowDropdown(false);
-    setShowAddNew(false);
-  };
+  const customerName = selectedParty?.name || partySearch.trim();
+  const mobile = selectedParty?.phone || mobileNumber.trim();
 
-  const handleAddNewParty = async () => {
-    if (!actor || !newPartyName.trim()) return;
-    setAddingParty(true);
-    try {
-      await actor.createParty({
-        id: BigInt(0),
-        name: newPartyName.trim(),
-        phone: newPartyPhone.trim(),
-        village: "",
-        createdAt: BigInt(0),
-      });
-      await loadParties();
-      const refreshed = await actor.getAllParties();
-      setParties(refreshed);
-      const newP = refreshed.find((p) => p.name === newPartyName.trim());
-      if (newP) handleSelectParty(newP);
-      setShowAddNew(false);
-      setNewPartyName("");
-      setNewPartyPhone("");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setAddingParty(false);
-    }
-  };
-
-  const handleSubmit = async () => {
+  const handleSave = async () => {
     if (!actor) return;
-
-    let customerName = selectedParty?.name ?? partySearch.trim();
-    let mobile = mobileNumber.trim();
-
-    if (txType === "advance") {
-      // Party is optional for advance
-      if (!customerName) {
-        // Derive name from payment mode
-        if (language === "gu") {
-          customerName =
-            paymentMode === "cash"
-              ? "કેશ એન્ટ્રી"
-              : paymentMode === "upi"
-                ? "UPI એન્ટ્રી"
-                : "સ્પ્લિટ એન્ટ્રી";
-        } else {
-          customerName =
-            paymentMode === "cash"
-              ? "Cash Entry"
-              : paymentMode === "upi"
-                ? "UPI Entry"
-                : "Split Entry";
-        }
-      }
-      // Mobile is optional for advance
-      if (!mobile) mobile = "";
-    } else {
-      // Balance: party is required
-      if (!customerName) {
-        alert(
-          language === "gu" ? "ગ્રાહકનું નામ જરૂરી છે" : "Customer name is required",
-        );
-        return;
-      }
-      if (!mobile) {
-        alert(
-          language === "gu" ? "મોબાઇલ નંબર જરૂરી છે" : "Mobile number is required",
-        );
-        return;
-      }
+    if (txType === "balance" && !customerName) {
+      alert(
+        language === "gu"
+          ? "બાકી વ્યવહાર માટે પાર્ટી જરૂરી છે"
+          : "Party is required for balance transactions",
+      );
+      return;
     }
 
     if (finalAmount <= 0) {
@@ -352,6 +316,27 @@ export default function NewTransaction({
         notes: "",
         createdAt: BigInt(Date.now()),
       });
+
+      // Store photo
+      if (photoBase64) {
+        try {
+          const photos = JSON.parse(
+            localStorage.getItem("kisanPhotos") || "[]",
+          ) as Array<{ key: string; photo: string; date: string }>;
+          photos.unshift({
+            key: `${customerName}-${workType}-${new Date(date).toLocaleDateString()}`,
+            photo: photoBase64,
+            date: new Date(date).toLocaleDateString(),
+          });
+          localStorage.setItem(
+            "kisanPhotos",
+            JSON.stringify(photos.slice(0, 50)),
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+
       setSavedTx({
         customerName,
         mobile,
@@ -364,6 +349,31 @@ export default function NewTransaction({
         paymentMode: effectivePaymentMode,
         date,
       });
+
+      // Auto-create payment reminder for baki transactions
+      if (txType === "balance" && udharAmount > 0 && customerName) {
+        try {
+          const reminder = {
+            id: String(Date.now()),
+            partyName: customerName,
+            mobile: mobile || "",
+            amount: udharAmount,
+            dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+            note: `${workType} - Auto reminder`,
+            isDone: false,
+          };
+          const existing = JSON.parse(
+            localStorage.getItem("kisan_payment_reminders") || "[]",
+          );
+          localStorage.setItem(
+            "kisan_payment_reminders",
+            JSON.stringify([reminder, ...existing]),
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+
       // Mark booking as completed if this transaction came from a booking
       if (prefill?.bookingId) {
         try {
@@ -402,7 +412,7 @@ export default function NewTransaction({
         "",
         tx.paymentMode !== "udhar"
           ? tx.paymentMode.startsWith("cash:")
-            ? `ચૂકવણી: સ્પ્લિટ (${tx.paymentMode.replace("|", " + ").replace("cash:", "💵₹").replace("upi:", "📱₹")})`
+            ? `ચૂકવણી: સ્પલિટ (${tx.paymentMode.replace("|", " + ").replace("cash:", "💵₹").replace("upi:", "📱₹")})`
             : `ચૂકવણી: ${tx.paymentMode.toUpperCase()}`
           : "પ્રકાર: ઉધાર",
       ].filter(Boolean);
@@ -432,6 +442,8 @@ export default function NewTransaction({
   const inputClass =
     "w-full border border-border rounded-xl px-3 py-3 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm";
   const labelClass = "block text-sm font-semibold text-foreground mb-1";
+
+  // Voice Review Modal - shown as overlay via props
 
   // WhatsApp Share Success Screen
   if (savedTx) {
@@ -558,7 +570,7 @@ export default function NewTransaction({
                 ? "સાંભળી રહ્યો..."
                 : "Listening..."
               : language === "gu"
-                ? "વૉઇસ"
+                ? "વોઇસ"
                 : "Voice"}
           </span>
         </button>
@@ -606,8 +618,8 @@ export default function NewTransaction({
         <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 px-4 py-2.5 text-xs text-blue-700 dark:text-blue-300">
           💡{" "}
           {language === "gu"
-            ? "એડ્વાન્સ: Party ની વિગત ભરવી જરૂરી નથી. ખાલી રહેવા દો તો Cash/UPI Entry સેવ થશે."
-            : "Advance: Party details are optional. Leave blank to save as Cash/UPI Entry."}
+            ? "રોકડ: Party ની વિગત ભરવી જરૂરી નથી. ખાલી રહેવા દો તો Cash/UPI Entry સેવ થશે."
+            : "Rokad: Party details are optional. Leave blank to save as Cash/UPI Entry."}
         </div>
       )}
 
@@ -616,7 +628,7 @@ export default function NewTransaction({
         <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 px-4 py-2.5 text-xs text-orange-700 dark:text-orange-300">
           📒{" "}
           {language === "gu"
-            ? 'બાકી: ઉધાર એન્ટ્રી. Party ની વિગત જરૂરી છે. જે રકમ ભરે તે "આ વખત ભરવું" માં નાખો.'
+            ? 'Baki: ઉધાર એન્ટ્રી. Party ની વિગત જરૂરી છે. જે રકમ ભરે તે "આ વખત ભરવું" માં નાખો.'
             : "Baki: Udhar entry. Party details required. Enter partial payment if party is paying some amount now."}
         </div>
       )}
@@ -715,7 +727,7 @@ export default function NewTransaction({
                 ))
               ) : (
                 <div className="px-4 py-3 text-sm text-muted-foreground">
-                  {language === "gu" ? "કોઈ પાર્ટી મળી નહીં" : "No party found"}
+                  {language === "gu" ? "કોઈ પાર્ટી મળી નહી" : "No party found"}
                 </div>
               )}
               <button
@@ -781,7 +793,7 @@ export default function NewTransaction({
         )}
       </div>
 
-      {/* Mobile Number -- shown for both but optional for advance */}
+      {/* Mobile Number */}
       <div>
         <p className={labelClass}>
           {t.mobile}{" "}
@@ -827,10 +839,11 @@ export default function NewTransaction({
           ))}
         </select>
       </div>
+
       {/* Tractor Optional */}
       <div>
         <p className={labelClass}>
-          {language === "gu" ? "ट्रेक्टर (वैकल्पिक)" : "Tractor (Optional)"}
+          {language === "gu" ? "Tractor (Optional)" : "Tractor (Optional)"}
         </p>
         <select
           className={inputClass}
@@ -842,7 +855,7 @@ export default function NewTransaction({
         >
           <option value="">
             {language === "gu"
-              ? "-- ट्रेक्टर पसंद करो (वैकल्पिक) --"
+              ? "-- Tractor pasand karo (optional) --"
               : "-- Select Tractor (Optional) --"}
           </option>
           {tractors.map((tr) => (
@@ -856,7 +869,7 @@ export default function NewTransaction({
       {/* Driver Optional */}
       <div>
         <p className={labelClass}>
-          {language === "gu" ? "ड्राइवर (वैकल्पिक)" : "Driver (Optional)"}
+          {language === "gu" ? "Driver (Optional)" : "Driver (Optional)"}
         </p>
         <select
           className={inputClass}
@@ -868,7 +881,7 @@ export default function NewTransaction({
         >
           <option value="">
             {language === "gu"
-              ? "-- ड्राइवर पसंद करो (वैकल्पिक) --"
+              ? "-- Driver pasand karo (optional) --"
               : "-- Select Driver (Optional) --"}
           </option>
           {drivers.map((dr) => (
@@ -1020,7 +1033,7 @@ export default function NewTransaction({
         </div>
       )}
 
-      {/* Summary */}
+      {/* Summary for advance type */}
       {finalAmount > 0 && txType === "advance" && (
         <div className="rounded-xl px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
           <div className="space-y-1 text-sm">
@@ -1099,6 +1112,68 @@ export default function NewTransaction({
         </div>
       )}
 
+      {/* Photo Attach (Optional) */}
+      <div>
+        <p className={labelClass}>
+          {language === "gu" ? "Photo (વૈકલ્પિક)" : "Photo (Optional)"}
+        </p>
+        <div className="space-y-2">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            id="tx-photo-input"
+            data-ocid="new_transaction.photo.upload_button"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.size > 600 * 1024) {
+                alert(
+                  language === "gu"
+                    ? "Photo moti chhe (max 500KB)"
+                    : "Photo too large (max 500KB)",
+                );
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = (ev) =>
+                setPhotoBase64(ev.target?.result as string);
+              reader.readAsDataURL(file);
+            }}
+          />
+          <label
+            htmlFor="tx-photo-input"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-border text-muted-foreground text-sm cursor-pointer hover:bg-muted"
+          >
+            📷{" "}
+            {photoBase64
+              ? language === "gu"
+                ? "Photo badlo"
+                : "Change Photo"
+              : language === "gu"
+                ? "Camera/Gallery thi photo"
+                : "Take/Choose Photo"}
+          </label>
+          {photoBase64 && (
+            <div className="relative">
+              <img
+                src={photoBase64}
+                alt="Preview"
+                className="w-full max-h-40 object-cover rounded-xl border border-border"
+              />
+              <button
+                type="button"
+                onClick={() => setPhotoBase64(null)}
+                className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+              >
+                X
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Payment Mode -- ONLY for advance type */}
       {txType === "advance" && (
         <div>
@@ -1120,7 +1195,7 @@ export default function NewTransaction({
                   ? `💵 ${t.cash}`
                   : pm === "upi"
                     ? `📱 ${t.upi}`
-                    : `🔀 ${language === "gu" ? "સ્પ્લિટ" : "Split"}`}
+                    : `🔀 ${language === "gu" ? "સ્પલિટ" : "Split"}`}
               </button>
             ))}
           </div>
@@ -1157,10 +1232,6 @@ export default function NewTransaction({
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground text-right">
-                {language === "gu" ? "કુલ" : "Total"}: ₹
-                {(cashSplit + upiSplit).toLocaleString()}
-              </p>
             </div>
           )}
         </div>
@@ -1170,8 +1241,8 @@ export default function NewTransaction({
       <div>
         <p className={labelClass}>{t.dateTime}</p>
         <input
-          className={inputClass}
           type="datetime-local"
+          className={inputClass}
           value={date}
           onChange={(e) => setDate(e.target.value)}
           data-ocid="new_transaction.date.input"
@@ -1181,14 +1252,15 @@ export default function NewTransaction({
       {/* Save Button */}
       <button
         type="button"
-        onClick={handleSubmit}
+        onClick={handleSave}
         disabled={saving}
-        data-ocid="new_transaction.submit.button"
-        className="w-full bg-primary text-primary-foreground font-bold py-4 rounded-xl text-lg shadow disabled:opacity-60"
+        data-ocid="new_transaction.submit_button"
+        className="w-full bg-primary text-primary-foreground font-bold py-4 rounded-2xl text-base shadow-lg disabled:opacity-50"
       >
         {saving ? t.loading : t.save}
       </button>
 
+      {/* Voice Review Modal */}
       <VoiceReview
         open={voiceReviewOpen}
         parsed={parsedVoice}
@@ -1197,7 +1269,10 @@ export default function NewTransaction({
         serviceRates={serviceRates}
         language={language}
         onConfirm={handleVoiceConfirm}
-        onClose={() => setVoiceReviewOpen(false)}
+        onClose={() => {
+          setVoiceReviewOpen(false);
+          setParsedVoice(null);
+        }}
       />
     </div>
   );

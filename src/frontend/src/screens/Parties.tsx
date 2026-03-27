@@ -9,10 +9,13 @@ interface Props {
   onPartyTap: (party: Party) => void;
 }
 
+type FilterTab = "all" | "udhar" | "paid";
+
 export default function Parties({ onPartyTap }: Props) {
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
+  const isGu = language === "gu";
 
   const [parties, setParties] = useState<Party[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, PartyStats>>({});
@@ -22,6 +25,7 @@ export default function Parties({ onPartyTap }: Props) {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
   const load = useCallback(async () => {
     if (!actor) return;
@@ -78,9 +82,24 @@ export default function Parties({ onPartyTap }: Props) {
     }
   };
 
-  const filtered = parties.filter((p) =>
+  const searchFiltered = parties.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const tabFiltered = searchFiltered.filter((p) => {
+    const udhar = statsMap[p.name]?.udharBalance ?? 0;
+    if (filterTab === "udhar") return udhar > 0;
+    if (filterTab === "paid") return udhar <= 0;
+    return true;
+  });
+
+  const totalUdharAll = Object.values(statsMap).reduce(
+    (s, st) => s + st.udharBalance,
+    0,
+  );
+  const udharPartiesCount = Object.values(statsMap).filter(
+    (st) => st.udharBalance > 0,
+  ).length;
 
   const inputClass =
     "w-full border border-border rounded-xl px-3 py-3 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm";
@@ -119,38 +138,74 @@ export default function Parties({ onPartyTap }: Props) {
           data-ocid="parties.add_party.button"
           className="flex items-center gap-1 border border-primary text-primary rounded-full px-3 py-2 text-sm font-semibold whitespace-nowrap"
         >
-          + {language === "gu" ? "નવો" : "New"}
+          + {isGu ? "નવો" : "New"}
         </button>
       </div>
 
-      {/* Summary row */}
-      <div className="px-4 py-3 flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-primary" />
-          <span className="text-xs text-muted-foreground">
-            {parties.length} {language === "gu" ? "પક્ષકારો" : "Parties"}
+      {/* Filter Tabs */}
+      <div className="flex border-b border-border">
+        {(
+          [
+            {
+              id: "all",
+              label_gu: "બધા",
+              label_en: "All",
+              count: parties.length,
+            },
+            {
+              id: "udhar",
+              label_gu: "ઉધાર બાકી",
+              label_en: "Udhar",
+              count: udharPartiesCount,
+            },
+            {
+              id: "paid",
+              label_gu: "ચૂકવ્યા",
+              label_en: "Paid",
+              count: parties.length - udharPartiesCount,
+            },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setFilterTab(tab.id)}
+            data-ocid={`parties.${tab.id}.tab`}
+            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1 transition-colors border-b-2 ${
+              filterTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground"
+            }`}
+          >
+            {isGu ? tab.label_gu : tab.label_en}
+            <span
+              className={`text-[10px] rounded-full px-1.5 font-bold ${
+                filterTab === tab.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Udhar total banner */}
+      {filterTab === "udhar" && totalUdharAll > 0 && (
+        <div className="mx-4 mt-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-xl px-4 py-2.5 flex justify-between">
+          <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+            {isGu ? "કુલ ઉધાર બાકી" : "Total Pending Udhar"}
+          </span>
+          <span className="font-bold text-orange-700 dark:text-orange-400">
+            ₹{totalUdharAll.toLocaleString()}
           </span>
         </div>
-        {(() => {
-          const totalUdhar = Object.values(statsMap).reduce(
-            (s, st) => s + st.udharBalance,
-            0,
-          );
-          return totalUdhar > 0 ? (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-destructive" />
-              <span className="text-xs text-destructive font-semibold">
-                ₹{totalUdhar.toLocaleString()}{" "}
-                {language === "gu" ? "બાકી" : "pending"}
-              </span>
-            </div>
-          ) : null;
-        })()}
-      </div>
+      )}
 
       {/* Add Party Form */}
       {showForm && (
-        <div className="mx-4 mb-3 bg-card rounded-xl border border-border p-4 space-y-3">
+        <div className="mx-4 mt-3 mb-3 bg-card rounded-xl border border-border p-4 space-y-3">
           <h2 className="font-bold text-foreground text-sm">{t.addParty}</h2>
           <input
             className={inputClass}
@@ -190,16 +245,24 @@ export default function Parties({ onPartyTap }: Props) {
       )}
 
       {/* Party List */}
-      {filtered.length === 0 ? (
+      {tabFiltered.length === 0 ? (
         <div className="text-center py-16 px-4" data-ocid="parties.empty_state">
           <p className="text-4xl mb-3">👥</p>
           <p className="text-muted-foreground text-sm font-medium">
-            {t.noParties}
+            {filterTab === "udhar"
+              ? isGu
+                ? "કોઈ ઉધાર નથી"
+                : "No pending udhar"
+              : filterTab === "paid"
+                ? isGu
+                  ? "કોઈ ચૂકવ્યા નથી"
+                  : "No paid parties"
+                : t.noParties}
           </p>
         </div>
       ) : (
         <div className="bg-card mx-0 border-t border-border">
-          {filtered.map((party, idx) => {
+          {tabFiltered.map((party, idx) => {
             const stats = statsMap[party.name];
             const udhar = stats?.udharBalance ?? 0;
             const earnings = stats?.totalEarnings ?? 0;
@@ -210,14 +273,11 @@ export default function Parties({ onPartyTap }: Props) {
                 data-ocid={`parties.item.${idx + 1}`}
               >
                 <div className="flex items-center px-4 py-3.5">
-                  {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center mr-3 flex-shrink-0">
                     <span className="text-base font-bold text-accent-foreground">
                       {party.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
-
-                  {/* Info */}
                   <button
                     type="button"
                     className="flex-1 text-left min-w-0"
@@ -233,8 +293,6 @@ export default function Parties({ onPartyTap }: Props) {
                       </p>
                     )}
                   </button>
-
-                  {/* Amount + Delete */}
                   <div className="flex items-center gap-2 ml-2">
                     <div className="text-right">
                       {earnings > 0 && (
@@ -244,8 +302,7 @@ export default function Parties({ onPartyTap }: Props) {
                       )}
                       {udhar > 0 && (
                         <p className="text-xs font-semibold text-destructive">
-                          ₹{udhar.toLocaleString()}{" "}
-                          {language === "gu" ? "બાકી" : "due"}
+                          ₹{udhar.toLocaleString()} {isGu ? "બાકી" : "due"}
                         </p>
                       )}
                     </div>

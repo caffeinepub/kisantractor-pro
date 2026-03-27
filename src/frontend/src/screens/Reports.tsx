@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Printer,
   Star,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -17,7 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Screen } from "../App";
-import type { Booking, Party, Tractor } from "../backend.d";
+import type { Booking, Expense, Party, Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
@@ -194,6 +195,11 @@ export default function Reports({ onNavigate }: Props) {
     totalEarnings: 0,
   });
 
+  const [_expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomeExpenseData, setIncomeExpenseData] = useState<
+    { month: string; income: number; expense: number }[]
+  >([]);
+
   // Party statement
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
@@ -208,17 +214,33 @@ export default function Reports({ onNavigate }: Props) {
     null,
   );
 
+  // Fuel log
+  const getFuelCostForTractor = (tractorId: bigint): number => {
+    try {
+      const fuelLog = JSON.parse(
+        localStorage.getItem("kisanFuelLog") || "[]",
+      ) as Array<{ tractorId: string; amount: number }>;
+      return fuelLog
+        .filter((e) => e.tractorId === String(tractorId))
+        .reduce((s, e) => s + e.amount, 0);
+    } catch {
+      return 0;
+    }
+  };
+
   useEffect(() => {
     if (!actor) return;
     Promise.all([
       actor.getAllBookings(),
       actor.getAllParties(),
       actor.getAllTractors(),
+      actor.getAllExpenses(),
     ])
-      .then(([b, p, tr]) => {
+      .then(([b, p, tr, exp]) => {
         setBookings(b);
         setParties(p);
         setTractors(tr);
+        setExpenses(exp);
         // Compute this month summary
         const now = new Date();
         const m = now.getMonth() + 1;
@@ -266,6 +288,24 @@ export default function Reports({ onNavigate }: Props) {
                 .filter((bk) => bk.paymentMode === "upi")
                 .reduce((s, bk) => s + bk.totalAmount, 0),
             };
+          }),
+        );
+        setIncomeExpenseData(
+          months.map((mo) => {
+            const inMonth = b.filter((bk) => {
+              const d = new Date(Number(bk.date));
+              return d.getMonth() + 1 === mo.m && d.getFullYear() === mo.y;
+            });
+            const incomeTotal = inMonth.reduce(
+              (s, bk) => s + bk.totalAmount,
+              0,
+            );
+            const expMonth = exp.filter((ex) => {
+              const d = new Date(Number(ex.date));
+              return d.getMonth() + 1 === mo.m && d.getFullYear() === mo.y;
+            });
+            const expTotal = expMonth.reduce((s, ex) => s + ex.amount, 0);
+            return { month: mo.label, income: incomeTotal, expense: expTotal };
           }),
         );
       })
@@ -421,9 +461,19 @@ export default function Reports({ onNavigate }: Props) {
         >
           <ArrowLeft size={20} className="text-foreground" />
         </button>
-        <h2 className="font-bold text-foreground text-base">
+        <h2 className="font-bold text-foreground text-base flex-1">
           {subViewTitles[view]}
         </h2>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          data-ocid="reports.pdf_download.button"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs font-semibold print:hidden"
+          title="Download PDF"
+        >
+          <Printer size={15} />
+          PDF
+        </button>
       </div>
 
       {/* PARTY STATEMENT */}
@@ -772,6 +822,12 @@ export default function Reports({ onNavigate }: Props) {
                             <p className="font-bold text-green-600 text-base">
                               ₹{earnings.toLocaleString()}
                             </p>
+                            {getFuelCostForTractor(tr.id) > 0 && (
+                              <p className="text-xs text-orange-500">
+                                ⛽ ₹
+                                {getFuelCostForTractor(tr.id).toLocaleString()}
+                              </p>
+                            )}
                           </div>
                           {isExpanded ? (
                             <ChevronUp
@@ -904,6 +960,58 @@ export default function Reports({ onNavigate }: Props) {
                   fill="#1565C0"
                   radius={[4, 4, 0, 0]}
                   name="upi"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-card rounded-xl shadow p-4">
+            <h2 className="font-bold text-foreground mb-3">
+              {isGu ? "આવક vs ખર્ચ" : "Income vs Expense"}
+            </h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={incomeExpenseData}
+                barCategoryGap="25%"
+                barGap={4}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    `₹${value.toLocaleString()}`,
+                    name === "income"
+                      ? isGu
+                        ? "📈 આવક"
+                        : "📈 Income"
+                      : isGu
+                        ? "📉 ખર્ચ"
+                        : "📉 Expense",
+                  ]}
+                />
+                <Legend
+                  formatter={(value) =>
+                    value === "income"
+                      ? isGu
+                        ? "📈 આવક"
+                        : "📈 Income"
+                      : isGu
+                        ? "📉 ખર્ચ"
+                        : "📉 Expense"
+                  }
+                />
+                <Bar
+                  dataKey="income"
+                  fill="#2E7D32"
+                  radius={[4, 4, 0, 0]}
+                  name="income"
+                />
+                <Bar
+                  dataKey="expense"
+                  fill="#C62828"
+                  radius={[4, 4, 0, 0]}
+                  name="expense"
                 />
               </BarChart>
             </ResponsiveContainer>

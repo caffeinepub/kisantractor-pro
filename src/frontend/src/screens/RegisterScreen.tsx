@@ -8,40 +8,59 @@ interface Props {
   onBack: () => void;
 }
 
+const SECURITY_QUESTIONS_EN = [
+  "What is your mother's name?",
+  "What was your first school?",
+  "What is your favourite colour?",
+  "What was the name of your first pet?",
+  "What is your father's name?",
+];
+const SECURITY_QUESTIONS_GU = [
+  "તમારી માતાનું નામ શું છે?",
+  "તમારી પહેલી શાળા કઈ હતી?",
+  "તમારો મનગમતો રંગ કયો છે?",
+  "તમારા પ્રથમ પ્રાણીનું નામ શું હતું?",
+  "તમારા પિતાનું નામ શું છે?",
+];
+
 export default function RegisterScreen({ onSuccess, onBack }: Props) {
   const { language, setCurrentOwnerMobile, setAuthRole } = useAppStore();
   const isGu = language === "gu";
+  const questions = isGu ? SECURITY_QUESTIONS_GU : SECURITY_QUESTIONS_EN;
 
+  const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [securityQuestion, setSecurityQuestion] = useState(questions[0]);
+  const [securityAnswer, setSecurityAnswer] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [errors, setErrors] = useState<{
-    mobile?: string;
-    password?: string;
-    confirm?: string;
-  }>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
 
   const validate = () => {
-    const newErrors: typeof errors = {};
+    const errs: Record<string, string> = {};
+    if (!name.trim()) {
+      errs.name = isGu ? "નામ દાખલ કરો" : "Enter your name";
+    }
     if (!/^\d{10}$/.test(mobile.trim())) {
-      newErrors.mobile = isGu
+      errs.mobile = isGu
         ? "10 અંકનો મોબાઇલ નંબર દાખલ કરો"
         : "Enter valid 10-digit mobile number";
     }
     if (password.length < 4) {
-      newErrors.password = isGu
-        ? "પાસવર્ડ ઓછામાં ઓછો 4 અક્ષરનો હોવો જોઈએ"
+      errs.password = isGu
+        ? "પાસવર્ડ ઓછામાં ઓછો 4 અક્ષરનો"
         : "Password must be at least 4 characters";
     }
     if (password !== confirmPassword) {
-      newErrors.confirm = isGu
-        ? "પાસવર્ડ મેળ ખાતો નથી"
-        : "Passwords do not match";
+      errs.confirm = isGu ? "પાસવર્ડ મેળ ખાતો નથી" : "Passwords do not match";
     }
-    return newErrors;
+    if (!securityAnswer.trim()) {
+      errs.answer = isGu ? "જવાબ દાખલ કરો" : "Enter security answer";
+    }
+    return errs;
   };
 
   const handleSubmit = () => {
@@ -51,7 +70,13 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
       return;
     }
 
-    const result = registerOwner(mobile.trim(), password);
+    const result = registerOwner(
+      mobile.trim(),
+      password,
+      name.trim(),
+      securityQuestion,
+      securityAnswer,
+    );
     if (!result.success) {
       setErrors({
         mobile: isGu
@@ -64,9 +89,7 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
     setCurrentOwnerMobile(mobile.trim());
     setAuthRole("owner");
     setSuccess(true);
-    setTimeout(() => {
-      onSuccess();
-    }, 1200);
+    setTimeout(() => onSuccess(), 1200);
   };
 
   if (success) {
@@ -96,7 +119,6 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
         <button
           type="button"
           onClick={onBack}
-          data-ocid="register.back_button"
           className="p-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft size={24} className="text-gray-700 dark:text-gray-200" />
@@ -107,47 +129,67 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="flex-1 flex flex-col items-center justify-center px-6 pb-10"
+        className="flex-1 flex flex-col items-center px-6 pb-10 overflow-y-auto"
       >
-        <div className="w-14 h-14 rounded-2xl bg-green-600 flex items-center justify-center mb-4 shadow-lg">
+        <div className="w-14 h-14 rounded-2xl bg-green-600 flex items-center justify-center mb-4 shadow-lg mt-4">
           <UserPlus size={28} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-2 text-center">
+        <h1 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-1 text-center">
           {isGu ? "નવું એકાઉન્ટ બનાવો" : "Create New Account"}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
           {isGu
             ? "દરેક માલિકનો ડેટા અલગ અને સુરક્ષિત"
             : "Each owner's data is separate and secure"}
         </p>
 
         <div className="w-full max-w-sm space-y-4">
+          {/* Name */}
+          <div>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErrors((p) => ({
+                  ...p,
+                  name: undefined as unknown as string,
+                }));
+              }}
+              placeholder={isGu ? "પૂરું નામ" : "Full Name"}
+              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600"
+            />
+            {errors.name && (
+              <p className="text-red-500 text-sm mt-1 px-1">❌ {errors.name}</p>
+            )}
+          </div>
+
+          {/* Mobile */}
           <div>
             <input
               type="tel"
               value={mobile}
               onChange={(e) => {
                 setMobile(e.target.value);
-                setErrors((p) => ({ ...p, mobile: undefined }));
+                setErrors((p) => ({
+                  ...p,
+                  mobile: undefined as unknown as string,
+                }));
               }}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               placeholder={
                 isGu ? "10 અંકનો મોબાઇલ નંબર" : "10-digit Mobile Number"
               }
               maxLength={10}
-              data-ocid="register.mobile_input"
-              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
+              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600"
             />
             {errors.mobile && (
-              <p
-                data-ocid="register.mobile_error_state"
-                className="text-red-500 text-sm mt-1 px-1"
-              >
+              <p className="text-red-500 text-sm mt-1 px-1">
                 ❌ {errors.mobile}
               </p>
             )}
           </div>
 
+          {/* Password */}
           <div>
             <div className="relative">
               <input
@@ -155,12 +197,13 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setErrors((p) => ({ ...p, password: undefined }));
+                  setErrors((p) => ({
+                    ...p,
+                    password: undefined as unknown as string,
+                  }));
                 }}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 placeholder={isGu ? "પાસવર્ડ" : "Password"}
-                data-ocid="register.password_input"
-                className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
+                className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600"
               />
               <button
                 type="button"
@@ -171,15 +214,13 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
               </button>
             </div>
             {errors.password && (
-              <p
-                data-ocid="register.password_error_state"
-                className="text-red-500 text-sm mt-1 px-1"
-              >
+              <p className="text-red-500 text-sm mt-1 px-1">
                 ❌ {errors.password}
               </p>
             )}
           </div>
 
+          {/* Confirm Password */}
           <div>
             <div className="relative">
               <input
@@ -187,12 +228,13 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
                 value={confirmPassword}
                 onChange={(e) => {
                   setConfirmPassword(e.target.value);
-                  setErrors((p) => ({ ...p, confirm: undefined }));
+                  setErrors((p) => ({
+                    ...p,
+                    confirm: undefined as unknown as string,
+                  }));
                 }}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 placeholder={isGu ? "પાસવર્ડ ફરી દાખલ કરો" : "Confirm Password"}
-                data-ocid="register.confirm_password_input"
-                className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
+                className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600"
               />
               <button
                 type="button"
@@ -203,11 +245,50 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
               </button>
             </div>
             {errors.confirm && (
-              <p
-                data-ocid="register.confirm_error_state"
-                className="text-red-500 text-sm mt-1 px-1"
-              >
+              <p className="text-red-500 text-sm mt-1 px-1">
                 ❌ {errors.confirm}
+              </p>
+            )}
+          </div>
+
+          {/* Security Question */}
+          <div>
+            <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1 px-1">
+              {isGu
+                ? "સુરક્ષા પ્રશ્ન (પાસવર્ડ ભૂલ્યા ત્યારે કામ આવશે)"
+                : "Security Question (for password reset)"}
+            </p>
+            <select
+              value={securityQuestion}
+              onChange={(e) => setSecurityQuestion(e.target.value)}
+              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base focus:outline-none focus:border-green-600"
+            >
+              {questions.map((q) => (
+                <option key={q} value={q}>
+                  {q}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Security Answer */}
+          <div>
+            <input
+              type="text"
+              value={securityAnswer}
+              onChange={(e) => {
+                setSecurityAnswer(e.target.value);
+                setErrors((p) => ({
+                  ...p,
+                  answer: undefined as unknown as string,
+                }));
+              }}
+              placeholder={isGu ? "જવાબ" : "Answer"}
+              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600"
+            />
+            {errors.answer && (
+              <p className="text-red-500 text-sm mt-1 px-1">
+                ❌ {errors.answer}
               </p>
             )}
           </div>
@@ -215,7 +296,6 @@ export default function RegisterScreen({ onSuccess, onBack }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            data-ocid="register.submit_button"
             className="w-full py-5 rounded-2xl bg-green-700 hover:bg-green-800 active:bg-green-900 text-white text-xl font-bold shadow-lg transition-colors"
           >
             {isGu ? "એકાઉન્ટ બનાવો" : "Create Account"}

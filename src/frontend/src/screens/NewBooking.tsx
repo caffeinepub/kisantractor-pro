@@ -1,9 +1,19 @@
-import { ArrowLeft, ChevronDown, Plus, Search, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  Mic,
+  MicOff,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Party } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import { useVoiceInput } from "../hooks/useVoiceInput";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { parseVoiceTransaction } from "../utils/parseVoiceTransaction";
 
 interface Props {
   onBack: () => void;
@@ -12,7 +22,7 @@ interface Props {
 
 export default function NewBooking({ onBack, onSaved }: Props) {
   const { actor } = useActor();
-  const { language, services } = useAppStore();
+  const { language, services, serviceRates } = useAppStore();
   const t = translations[language];
 
   const [parties, setParties] = useState<Party[]>([]);
@@ -25,6 +35,7 @@ export default function NewBooking({ onBack, onSaved }: Props) {
   const [newPartyPhone, setNewPartyPhone] = useState("");
   const [addingParty, setAddingParty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [voiceBanner, setVoiceBanner] = useState("");
 
   const [workType, setWorkType] = useState(services[0] ?? "Ploughing");
   const [bookingDate, setBookingDate] = useState(
@@ -32,6 +43,50 @@ export default function NewBooking({ onBack, onSaved }: Props) {
   );
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const voiceLang = language === "gu" ? "gu-IN" : "en-IN";
+  const { isListening, startListening, stopListening, isSupported } =
+    useVoiceInput({
+      language: voiceLang,
+      onResult: (transcript) => {
+        const voiceServices = services.map((s) => ({
+          name: s,
+          perHour: serviceRates?.[s]?.perHour,
+          perMinute: serviceRates?.[s]?.perMinute,
+        }));
+        const parsed = parseVoiceTransaction(
+          transcript,
+          parties,
+          voiceServices,
+        );
+        let filled: string[] = [];
+        if (parsed.partyName) {
+          setPartySearch(parsed.partyName);
+          setSelectedParty(null);
+          // Try to auto-select matching party
+          const match = parties.find(
+            (p) => p.name.toLowerCase() === parsed.partyName?.toLowerCase(),
+          );
+          if (match) {
+            setSelectedParty(match);
+            setMobileNumber(match.phone ?? "");
+          }
+          filled.push(parsed.partyName);
+        }
+        if (parsed.serviceName) {
+          setWorkType(parsed.serviceName);
+          filled.push(parsed.serviceName);
+        }
+        if (filled.length > 0) {
+          setVoiceBanner(
+            language === "gu"
+              ? `🎤 Voice ભર્યું: ${filled.join(" - ")}`
+              : `🎤 Voice filled: ${filled.join(" - ")}`,
+          );
+          setTimeout(() => setVoiceBanner(""), 3000);
+        }
+      },
+    });
 
   const loadParties = useCallback(async () => {
     if (!actor) return;
@@ -163,8 +218,37 @@ export default function NewBooking({ onBack, onSaved }: Props) {
         >
           <ArrowLeft size={22} className="text-foreground" />
         </button>
-        <h1 className="text-xl font-bold text-foreground">{t.newBooking}</h1>
+        <h1 className="text-xl font-bold text-foreground flex-1">
+          {t.newBooking}
+        </h1>
+        {isSupported && (
+          <button
+            type="button"
+            onClick={isListening ? stopListening : startListening}
+            className={`p-2 rounded-full transition-all ${
+              isListening
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+            title={isListening ? "Stop" : "Voice Input"}
+            data-ocid="new_booking.voice.button"
+          >
+            {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+          </button>
+        )}
       </div>
+
+      {voiceBanner && (
+        <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 px-4 py-2.5 text-xs text-green-700 dark:text-green-300 font-medium">
+          {voiceBanner}
+        </div>
+      )}
+
+      {isListening && (
+        <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-4 py-2.5 text-xs text-red-700 dark:text-red-300 text-center font-medium">
+          {language === "gu" ? "🎤 સાંભળી રહ્યો છું..." : "🎤 Listening..."}
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Party Search */}

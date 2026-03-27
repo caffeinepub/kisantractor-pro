@@ -5,6 +5,19 @@ import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
 
+function parseExpenseDescription(raw: string): {
+  mode: "cash" | "upi" | null;
+  description: string;
+} {
+  if (raw.startsWith("[cash]")) {
+    return { mode: "cash", description: raw.slice(6).trim() };
+  }
+  if (raw.startsWith("[upi]")) {
+    return { mode: "upi", description: raw.slice(5).trim() };
+  }
+  return { mode: null, description: raw };
+}
+
 export default function Expenses() {
   const { actor } = useActor();
   const { language } = useAppStore();
@@ -21,6 +34,7 @@ export default function Expenses() {
     amount: 0,
     description: "",
     date: now.toISOString().slice(0, 10),
+    paymentMode: "cash" as "cash" | "upi",
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: now is computed once at render
@@ -45,12 +59,13 @@ export default function Expenses() {
 
   const addExpense = async () => {
     if (!actor || !form.amount) return;
+    const encodedDescription = `[${form.paymentMode}]${form.description ? ` ${form.description}` : ""}`;
     await actor.createExpense({
       id: BigInt(0),
       expenseType: form.expenseType,
       tractorId: form.tractorId ? BigInt(form.tractorId) : undefined,
       amount: form.amount,
-      description: form.description,
+      description: encodedDescription,
       date: BigInt(new Date(form.date).getTime()),
       createdAt: BigInt(Date.now()),
     });
@@ -60,6 +75,7 @@ export default function Expenses() {
       amount: 0,
       description: "",
       date: now.toISOString().slice(0, 10),
+      paymentMode: "cash",
     });
     setShowForm(false);
     load();
@@ -162,11 +178,46 @@ export default function Expenses() {
             value={form.date}
             onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
           />
+
+          {/* Payment Mode */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              {language === "gu" ? "ચૂકવણી પ્રકાર" : "Payment Mode"}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, paymentMode: "cash" }))}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                  form.paymentMode === "cash"
+                    ? "border-primary bg-accent text-primary"
+                    : "border-gray-200 dark:border-gray-600 text-gray-500"
+                }`}
+                data-ocid="expenses.cash.toggle"
+              >
+                💵 {language === "gu" ? "કેશ" : "Cash"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, paymentMode: "upi" }))}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                  form.paymentMode === "upi"
+                    ? "border-primary bg-accent text-primary"
+                    : "border-gray-200 dark:border-gray-600 text-gray-500"
+                }`}
+                data-ocid="expenses.upi.toggle"
+              >
+                📱 UPI
+              </button>
+            </div>
+          </div>
+
           <div className="flex gap-3">
             <button
               type="button"
               onClick={addExpense}
               className="flex-1 bg-orange-500 text-white font-bold py-3 rounded-xl"
+              data-ocid="expenses.save.button"
             >
               {t.save}
             </button>
@@ -174,6 +225,7 @@ export default function Expenses() {
               type="button"
               onClick={() => setShowForm(false)}
               className="flex-1 border border-gray-300 text-gray-600 font-bold py-3 rounded-xl"
+              data-ocid="expenses.cancel.button"
             >
               {t.cancel}
             </button>
@@ -182,34 +234,54 @@ export default function Expenses() {
       )}
       {loading && <p className="text-center text-gray-400">{t.loading}</p>}
       <div className="space-y-3">
-        {expenses.map((exp) => (
-          <div
-            key={Number(exp.id)}
-            className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 flex items-center justify-between"
-          >
-            <div>
-              <p className="font-bold text-gray-900 dark:text-white capitalize">
-                {exp.expenseType}
-              </p>
-              <p className="text-sm text-gray-500">{exp.description}</p>
-              <p className="text-xs text-gray-400">
-                {new Date(Number(exp.date)).toLocaleDateString()}
-              </p>
+        {expenses.map((exp) => {
+          const { mode, description } = parseExpenseDescription(
+            exp.description ?? "",
+          );
+          return (
+            <div
+              key={Number(exp.id)}
+              className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 flex items-center justify-between"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-gray-900 dark:text-white capitalize">
+                    {exp.expenseType}
+                  </p>
+                  {mode === "cash" && (
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-semibold">
+                      💵 Cash
+                    </span>
+                  )}
+                  {mode === "upi" && (
+                    <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">
+                      📱 UPI
+                    </span>
+                  )}
+                </div>
+                {description && (
+                  <p className="text-sm text-gray-500">{description}</p>
+                )}
+                <p className="text-xs text-gray-400">
+                  {new Date(Number(exp.date)).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-red-600">
+                  ₹{exp.amount.toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => deleteExpense(exp.id)}
+                  className="text-red-400 hover:text-red-600"
+                  data-ocid="expenses.delete_button"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-red-600">
-                ₹{exp.amount.toLocaleString()}
-              </span>
-              <button
-                type="button"
-                onClick={() => deleteExpense(exp.id)}
-                className="text-red-400 hover:text-red-600"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -11,6 +11,9 @@ export interface DriverRequest {
 
 export interface OwnerAccount {
   password: string;
+  name: string;
+  securityQuestion: string;
+  securityAnswer: string;
   createdAt: number;
 }
 
@@ -33,12 +36,21 @@ function saveAccounts(accounts: Record<string, OwnerAccount>) {
 export function registerOwner(
   mobile: string,
   password: string,
+  name: string,
+  securityQuestion: string,
+  securityAnswer: string,
 ): { success: boolean; error?: string } {
   const accounts = getAccounts();
   if (accounts[mobile]) {
     return { success: false, error: "already_registered" };
   }
-  accounts[mobile] = { password, createdAt: Date.now() };
+  accounts[mobile] = {
+    password,
+    name,
+    securityQuestion,
+    securityAnswer: securityAnswer.trim().toLowerCase(),
+    createdAt: Date.now(),
+  };
   saveAccounts(accounts);
   return { success: true };
 }
@@ -48,6 +60,32 @@ export function loginOwner(mobile: string, password: string): boolean {
   const account = accounts[mobile];
   if (!account) return false;
   return account.password === password;
+}
+
+export function getOwnerName(mobile: string): string {
+  const accounts = getAccounts();
+  return accounts[mobile]?.name || mobile;
+}
+
+export function getOwnerAccount(mobile: string): OwnerAccount | null {
+  const accounts = getAccounts();
+  return accounts[mobile] || null;
+}
+
+export function resetOwnerPassword(
+  mobile: string,
+  securityAnswer: string,
+  newPassword: string,
+): { success: boolean; error?: string } {
+  const accounts = getAccounts();
+  const account = accounts[mobile];
+  if (!account) return { success: false, error: "not_found" };
+  if (account.securityAnswer !== securityAnswer.trim().toLowerCase()) {
+    return { success: false, error: "wrong_answer" };
+  }
+  accounts[mobile].password = newPassword;
+  saveAccounts(accounts);
+  return { success: true };
 }
 
 export function changeOwnerPassword(mobile: string, newPassword: string) {
@@ -78,27 +116,7 @@ function getStoreKey(mobile: string | null): string {
 function loadFromStorage(mobile: string | null) {
   try {
     const key = getStoreKey(mobile);
-    let raw = localStorage.getItem(key);
-
-    // Migration: if no per-owner store but legacy kisan_store exists, migrate it
-    if (!raw && mobile) {
-      const legacy = localStorage.getItem("kisan_store");
-      if (legacy) {
-        try {
-          const parsed = JSON.parse(legacy);
-          if (
-            parsed.ownerMobile === mobile ||
-            (mobile === "9624745944" && !parsed.ownerMobile)
-          ) {
-            localStorage.setItem(key, legacy);
-            raw = legacy;
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-
+    const raw = localStorage.getItem(key);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (parsed.driverRequests) {
@@ -132,27 +150,6 @@ function saveToStorage(mobile: string | null, state: Partial<AppState>) {
     // ignore
   }
 }
-
-// Ensure default account exists for first-time migration
-function ensureDefaultAccount() {
-  const accounts = getAccounts();
-  if (Object.keys(accounts).length === 0) {
-    const legacy = localStorage.getItem("kisan_store");
-    if (legacy) {
-      try {
-        const parsed = JSON.parse(legacy);
-        const mobile = parsed.ownerMobile || "9624745944";
-        const password = parsed.ownerPassword || "12345";
-        accounts[mobile] = { password, createdAt: Date.now() };
-        saveAccounts(accounts);
-      } catch {
-        // ignore
-      }
-    }
-  }
-}
-
-ensureDefaultAccount();
 
 interface AppState {
   language: Language;
@@ -188,11 +185,11 @@ const stored = loadFromStorage(initMobile);
 export const useAppStore = create<AppState>((set, get) => ({
   language: stored.language ?? "gu",
   darkMode: stored.darkMode ?? false,
-  authRole: stored.authRole ?? null,
+  authRole: null, // always start logged out; must login every session
   loggedInDriverId: stored.loggedInDriverId ?? null,
   ownerPassword: stored.ownerPassword ?? "12345",
   ownerMobile: stored.ownerMobile ?? "9624745944",
-  currentOwnerMobile: initMobile,
+  currentOwnerMobile: null, // cleared on load; set after login
   driverRequests: stored.driverRequests ?? [],
   services: stored.services ?? [
     "Ploughing",

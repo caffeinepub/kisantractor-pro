@@ -7,6 +7,7 @@ import {
   Check,
   IndianRupee,
   LayoutDashboard,
+  LogOut,
   Menu,
   Pencil,
   Receipt,
@@ -19,6 +20,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { Booking, MaintenanceReminder, Party } from "./backend.d";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import PinLock from "./components/PinLock";
 import { useActor } from "./hooks/useActor";
 import { useSettingsSync } from "./hooks/useSettingsSync";
 import { translations } from "./i18n";
@@ -29,12 +31,15 @@ import Dashboard from "./screens/Dashboard";
 import Drivers from "./screens/Drivers";
 import Expenses from "./screens/Expenses";
 import Invoice from "./screens/Invoice";
+import LoginScreen from "./screens/LoginScreen";
 import NewBooking from "./screens/NewBooking";
 import NewTransaction from "./screens/NewTransaction";
 import Notifications from "./screens/Notifications";
+import OwnerLoginScreen from "./screens/OwnerLoginScreen";
 import Parties from "./screens/Parties";
 import PartyDetail from "./screens/PartyDetail";
 import PaymentIn from "./screens/PaymentIn";
+import RegisterScreen from "./screens/RegisterScreen";
 import Reports from "./screens/Reports";
 import ServiceManagement from "./screens/ServiceManagement";
 import SettingsScreen from "./screens/Settings";
@@ -137,7 +142,7 @@ const screenTitles: Record<Screen, { en: string; gu: string }> = {
   paymentIn: { en: "Payment In", gu: "ચૂકવણી લો" },
   newBooking: { en: "Navi Booking", gu: "નવી બુકિંગ" },
   bookingDetail: { en: "Booking Detail", gu: "બુકિંગ વિગત" },
-  invoice: { en: "Invoice", gu: "ઇન્વ್ઓઇસ" },
+  invoice: { en: "Invoice", gu: "ઇન્વ\u{0D04}ઇસ" },
   partyDetail: { en: "Party Detail", gu: "પક્ષ વિગત" },
   settings: { en: "Settings", gu: "સેટિંગ" },
   serviceManagement: { en: "Manage Services", gu: "સેવા મેનેજ" },
@@ -151,7 +156,11 @@ const screenTitles: Record<Screen, { en: string; gu: string }> = {
 };
 
 export default function App() {
-  const { language, darkMode } = useAppStore();
+  const { language, darkMode, authRole, setAuthRole, setCurrentOwnerMobile } =
+    useAppStore();
+  const [authScreen, setAuthScreen] = useState<
+    "welcome" | "login" | "register"
+  >("welcome");
   const { actor } = useActor();
   useSettingsSync();
   const _t = translations[language];
@@ -173,6 +182,12 @@ export default function App() {
   const [nameInput, setNameInput] = useState(businessName);
   const [notifBadge, setNotifBadge] = useState(0);
 
+  // PIN lock state
+  const [pinUnlocked, setPinUnlocked] = useState(
+    () => !localStorage.getItem("kisanPin"),
+  );
+  const [showPinSetup, setShowPinSetup] = useState(false);
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -185,12 +200,10 @@ export default function App() {
   const computeBadge = useCallback(async () => {
     try {
       const now = Date.now();
-      // Payment reminders
       const pr = JSON.parse(
         localStorage.getItem("kisan_payment_reminders") || "[]",
       ) as Array<{ isDone: boolean; dueDate: number }>;
       const pendingPay = pr.filter((r) => !r.isDone).length;
-      // Maintenance reminders
       let overdueMain = 0;
       if (actor) {
         const rem =
@@ -292,6 +305,58 @@ export default function App() {
 
   // suppress unused warning
   void CalendarDays;
+
+  // Auth: show login screens if not authenticated
+  if (!authRole) {
+    if (authScreen === "register") {
+      return (
+        <RegisterScreen
+          onSuccess={() => setAuthScreen("welcome")}
+          onBack={() => setAuthScreen("welcome")}
+        />
+      );
+    }
+    if (authScreen === "login") {
+      return (
+        <OwnerLoginScreen
+          onSuccess={() => setAuthScreen("welcome")}
+          onBack={() => setAuthScreen("welcome")}
+        />
+      );
+    }
+    return (
+      <LoginScreen
+        onOwnerLogin={() => setAuthScreen("login")}
+        onRegister={() => setAuthScreen("register")}
+      />
+    );
+  }
+
+  // PIN lock: show PIN entry before app
+  if (!pinUnlocked) {
+    return (
+      <PinLock
+        mode="enter"
+        onUnlock={() => setPinUnlocked(true)}
+        language={language}
+      />
+    );
+  }
+
+  // PIN setup overlay
+  if (showPinSetup) {
+    return (
+      <PinLock
+        mode="setup"
+        onSetup={(pin) => {
+          localStorage.setItem("kisanPin", pin);
+          setShowPinSetup(false);
+        }}
+        onCancel={() => setShowPinSetup(false)}
+        language={language}
+      />
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -419,13 +484,24 @@ export default function App() {
                 </div>
                 {language === "gu" ? "સૂચના" : "Notifications"}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthRole(null);
+                  setCurrentOwnerMobile(null);
+                  setDrawerOpen(false);
+                }}
+                className="w-full flex items-center gap-4 px-5 py-3.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <LogOut size={20} />
+                {language === "gu" ? "લૉગ આઉટ" : "Logout"}
+              </button>
             </div>
           </div>
 
           {/* Top App Bar */}
           <header className="flex items-center justify-between px-4 py-3 bg-card border-b border-border sticky top-0 z-30">
             {isMainScreen ? (
-              /* Main screen: hamburger + editable business name */
               <>
                 <div className="flex items-center gap-3">
                   <button
@@ -493,7 +569,6 @@ export default function App() {
                 </div>
               </>
             ) : (
-              /* Sub-screen: back button + screen title */
               <>
                 <div className="flex items-center gap-2">
                   <button
@@ -587,6 +662,7 @@ export default function App() {
               <SettingsScreen
                 onBack={() => setScreen("dashboard")}
                 onNavigate={(s) => setScreen(s as Screen)}
+                onShowPinSetup={() => setShowPinSetup(true)}
               />
             )}
             {screen === "serviceManagement" && (
