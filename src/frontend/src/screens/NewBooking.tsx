@@ -13,6 +13,7 @@ import { useActor } from "../hooks/useActor";
 import { useVoiceInput } from "../hooks/useVoiceInput";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 import { parseVoiceTransaction } from "../utils/parseVoiceTransaction";
 
 interface Props {
@@ -25,7 +26,9 @@ export default function NewBooking({ onBack, onSaved }: Props) {
   const { language, services, serviceRates } = useAppStore();
   const t = translations[language];
 
-  const [parties, setParties] = useState<Party[]>([]);
+  const [parties, setParties] = useState<Party[]>(() =>
+    getCache<Party>("parties"),
+  );
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [mobileNumber, setMobileNumber] = useState("");
@@ -92,6 +95,7 @@ export default function NewBooking({ onBack, onSaved }: Props) {
     if (!actor) return;
     try {
       const all = await actor.getAllParties();
+      setCache("parties", all);
       setParties(all);
     } catch (e) {
       console.error(e);

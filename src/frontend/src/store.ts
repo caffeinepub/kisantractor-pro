@@ -182,14 +182,18 @@ interface AppState {
 const initMobile = getCurrentOwnerMobile();
 const stored = loadFromStorage(initMobile);
 
+// Restore session if a valid owner account exists in localStorage
+const initAuthRole: "owner" | null =
+  initMobile && getAccounts()[initMobile] ? "owner" : null;
+
 export const useAppStore = create<AppState>((set, get) => ({
   language: stored.language ?? "gu",
   darkMode: stored.darkMode ?? false,
-  authRole: null, // always start logged out; must login every session
+  authRole: initAuthRole, // restore session from localStorage
   loggedInDriverId: stored.loggedInDriverId ?? null,
   ownerPassword: stored.ownerPassword ?? "12345",
   ownerMobile: stored.ownerMobile ?? "9624745944",
-  currentOwnerMobile: null, // cleared on load; set after login
+  currentOwnerMobile: initMobile, // restore from localStorage
   driverRequests: stored.driverRequests ?? [],
   services: stored.services ?? [
     "Ploughing",

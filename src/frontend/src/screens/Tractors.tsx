@@ -4,6 +4,7 @@ import type { Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 interface FuelEntry {
   id: string;
@@ -30,8 +31,12 @@ export default function TractorScreen() {
   const { language } = useAppStore();
   const t = translations[language];
   const isGu = language === "gu";
-  const [tractors, setTractors] = useState<Tractor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<Tractor>("tractors").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [number, setNumber] = useState("");
@@ -50,6 +55,7 @@ export default function TractorScreen() {
   const load = useCallback(async () => {
     if (!actor) return;
     const data = await actor.getAllTractors();
+    setCache("tractors", data);
     setTractors(data);
     setLoading(false);
     if (!fuelTractorId && data.length > 0) {

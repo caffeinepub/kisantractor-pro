@@ -4,13 +4,18 @@ import type { CreditRecord } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 export default function Credits() {
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
-  const [credits, setCredits] = useState<CreditRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [credits, setCredits] = useState<CreditRecord[]>(() =>
+    getCache<CreditRecord>("credits"),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<CreditRecord>("credits").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [payingId, setPayingId] = useState<bigint | null>(null);
   const [payAmount, setPayAmount] = useState(0);
@@ -25,6 +30,7 @@ export default function Credits() {
   const load = useCallback(async () => {
     if (!actor) return;
     const data = await actor.getAllCreditRecords();
+    setCache("credits", data);
     setCredits(data);
     setLoading(false);
   }, [actor]);

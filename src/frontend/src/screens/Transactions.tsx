@@ -11,6 +11,7 @@ import type { Booking } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 type TxEntry = {
   key: string;
@@ -127,8 +128,14 @@ export default function Transactions({
   const { language } = useAppStore();
   const t = translations[language];
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState<Booking[]>(() =>
+    getCache<Booking>("bookings").sort(
+      (a, b) => Number(b.date) - Number(a.date),
+    ),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<Booking>("bookings").length === 0,
+  );
   const [filter, setFilter] = useState<Filter>("all");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
@@ -139,7 +146,9 @@ export default function Transactions({
     if (!actor) return;
     try {
       const all = await actor.getAllBookings();
-      setBookings(all.sort((a, b) => Number(b.date) - Number(a.date)));
+      const sorted = all.sort((a, b) => Number(b.date) - Number(a.date));
+      setCache("bookings", sorted);
+      setBookings(sorted);
     } catch (e) {
       console.error(e);
     } finally {

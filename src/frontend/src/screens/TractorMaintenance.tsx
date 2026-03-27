@@ -3,13 +3,20 @@ import { useCallback, useEffect, useState } from "react";
 import type { MaintenanceReminder, Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 export default function TractorMaintenance() {
   const { actor } = useActor();
   const { language } = useAppStore();
-  const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reminders, setReminders] = useState<MaintenanceReminder[]>(() =>
+    getCache<MaintenanceReminder>("reminders"),
+  );
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<MaintenanceReminder>("reminders").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [tractorId, setTractorId] = useState("");
   const [reminderType, setReminderType] = useState("Oil Change");
@@ -33,7 +40,12 @@ export default function TractorMaintenance() {
       actor.getAllMaintenanceReminders(),
       actor.getAllTractors(),
     ]);
-    setReminders(rem.sort((a, b) => Number(b.createdAt) - Number(a.createdAt)));
+    const sorted = rem.sort(
+      (a, b) => Number(b.createdAt) - Number(a.createdAt),
+    );
+    setCache("reminders", sorted);
+    setCache("tractors", tr);
+    setReminders(sorted);
     setTractors(tr);
     setLoading(false);
   }, [actor]);

@@ -22,6 +22,7 @@ import type { Booking, Expense, Party, Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 const MONTH_NAMES = [
   "Jan",
@@ -179,9 +180,15 @@ export default function Reports({ onNavigate }: Props) {
   const [view, setView] = useState<View>("main");
 
   // Data
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [parties, setParties] = useState<Party[]>([]);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>(() =>
+    getCache<Booking>("bookings"),
+  );
+  const [parties, setParties] = useState<Party[]>(() =>
+    getCache<Party>("parties"),
+  );
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
 
   // Monthly summary state
   const [chartData, setChartData] = useState<
@@ -237,6 +244,10 @@ export default function Reports({ onNavigate }: Props) {
       actor.getAllExpenses(),
     ])
       .then(([b, p, tr, exp]) => {
+        setCache("bookings", b);
+        setCache("parties", p);
+        setCache("tractors", tr);
+        setCache("expenses", exp);
         setBookings(b);
         setParties(p);
         setTractors(tr);

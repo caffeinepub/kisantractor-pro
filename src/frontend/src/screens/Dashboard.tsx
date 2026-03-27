@@ -17,6 +17,7 @@ import type {
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 interface Props {
   onBookingTap: (booking: Booking) => void;
@@ -46,12 +47,18 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
   const { actor } = useActor();
   const { language, services } = useAppStore();
   const t = translations[language];
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>(() =>
+    getCache<Booking>("bookings"),
+  );
   const [todayEarnings, setTodayEarnings] = useState(0);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
   const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
   const [pendingCredits, setPendingCredits] = useState<CreditRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => getCache<Booking>("bookings").length === 0,
+  );
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -68,6 +75,8 @@ export default function Dashboard({ onBookingTap, onNavigate }: Props) {
           actor.getUpcomingReminders(BigInt(Date.now())),
           actor.getPendingCredits(),
         ]);
+      setCache("bookings", allBookings);
+      setCache("tractors", allTractors);
       setBookings(allBookings);
       setTodayEarnings(earnings);
       setTractors(allTractors);

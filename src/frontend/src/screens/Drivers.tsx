@@ -21,6 +21,7 @@ import {
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 // ── LocalStorage helpers ──────────────────────────────────────────────────────
 
@@ -84,8 +85,12 @@ export default function Drivers() {
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState<Driver[]>(() =>
+    getCache<Driver>("drivers"),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<Driver>("drivers").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -115,6 +120,7 @@ export default function Drivers() {
   const load = useCallback(async () => {
     if (!actor) return;
     const data = await actor.getAllDrivers();
+    setCache("drivers", data);
     setDrivers(data);
     setLoading(false);
   }, [actor]);

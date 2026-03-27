@@ -4,6 +4,7 @@ import type { Booking } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 interface Props {
   onNewBooking: () => void;
@@ -21,17 +22,24 @@ export default function Bookings({
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>(() =>
+    getCache<Booking>("bookings"),
+  );
   const [activeTab, setActiveTab] = useState<
     "all" | "pending" | "ongoing" | "completed"
   >("all");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => getCache<Booking>("bookings").length === 0,
+  );
 
   useEffect(() => {
     if (!actor) return;
     actor
       .getAllBookings()
-      .then(setBookings)
+      .then((data) => {
+        setCache("bookings", data);
+        setBookings(data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [actor]);

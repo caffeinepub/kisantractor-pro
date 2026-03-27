@@ -4,6 +4,7 @@ import type { Party, PartyStats } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 interface Props {
   onPartyTap: (party: Party) => void;
@@ -17,9 +18,13 @@ export default function Parties({ onPartyTap }: Props) {
   const t = translations[language];
   const isGu = language === "gu";
 
-  const [parties, setParties] = useState<Party[]>([]);
+  const [parties, setParties] = useState<Party[]>(() =>
+    getCache<Party>("parties"),
+  );
   const [statsMap, setStatsMap] = useState<Record<string, PartyStats>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => getCache<Party>("parties").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -31,6 +36,7 @@ export default function Parties({ onPartyTap }: Props) {
     if (!actor) return;
     try {
       const allParties = await actor.getAllParties();
+      setCache("parties", allParties);
       setParties(allParties);
       const statsEntries = await Promise.all(
         allParties.map(async (p) => {

@@ -70,7 +70,8 @@ export default function ServiceManagement({ onBack }: Props) {
                     <div className="flex items-center gap-2">
                       {serviceRates[svc] ? (
                         <span className="text-xs text-green-600 dark:text-green-400">
-                          ₹{serviceRates[svc].perHour}/hr
+                          ₹{serviceRates[svc].perHour}/hr · ₹
+                          {serviceRates[svc].perMinute}/min
                         </span>
                       ) : (
                         <span className="text-xs text-gray-400">
@@ -113,10 +114,18 @@ export default function ServiceManagement({ onBack }: Props) {
                           defaultValue={serviceRates[svc]?.perHour ?? ""}
                           onBlur={(e) => {
                             const val = Number(e.target.value) || 0;
+                            const autoMin = Number.parseFloat(
+                              (val / 60).toFixed(2),
+                            );
                             setServiceRate(svc, {
                               perHour: val,
-                              perMinute: serviceRates[svc]?.perMinute ?? 0,
+                              perMinute: autoMin,
                             });
+                            const perMinuteInput = document.getElementById(
+                              `per-minute-${svc}`,
+                            ) as HTMLInputElement;
+                            if (perMinuteInput)
+                              perMinuteInput.value = String(autoMin);
                           }}
                           data-ocid={`service_mgmt.services.per_hour.${i + 1}`}
                           placeholder="0"
@@ -125,7 +134,10 @@ export default function ServiceManagement({ onBack }: Props) {
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                          {t.perMinuteRate} (₹)
+                          {t.perMinuteRate} (₹){" "}
+                          <span className="text-green-600 dark:text-green-400">
+                            (auto)
+                          </span>
                         </p>
                         <input
                           type="number"

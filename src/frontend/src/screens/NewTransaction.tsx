@@ -15,6 +15,7 @@ import { useActor } from "../hooks/useActor";
 import { useVoiceInput } from "../hooks/useVoiceInput";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 import { parseVoiceTransaction } from "../utils/parseVoiceTransaction";
 
 interface Props {
@@ -52,7 +53,9 @@ export default function NewTransaction({
   const { language, services, serviceRates } = useAppStore();
   const t = translations[language];
 
-  const [parties, setParties] = useState<Party[]>([]);
+  const [parties, setParties] = useState<Party[]>(() =>
+    getCache<Party>("parties"),
+  );
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [mobileNumber, setMobileNumber] = useState("");
@@ -80,8 +83,12 @@ export default function NewTransaction({
     typeof parseVoiceTransaction
   > | null>(null);
   const [savedTx, setSavedTx] = useState<SavedTxInfo | null>(null);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
+  const [drivers, setDrivers] = useState<Driver[]>(() =>
+    getCache<Driver>("drivers"),
+  );
   const [selectedTractorId, setSelectedTractorId] = useState<bigint | null>(
     null,
   );
@@ -117,6 +124,9 @@ export default function NewTransaction({
       actor.getAllTractors(),
       actor.getAllDrivers(),
     ]);
+    setCache("parties", allParties);
+    setCache("tractors", allTractors);
+    setCache("drivers", allDrivers);
     setParties(allParties);
     setTractors(allTractors);
     setDrivers(allDrivers);
@@ -241,6 +251,7 @@ export default function NewTransaction({
     p.name.toLowerCase().includes(partySearch.toLowerCase()),
   );
 
+  const isTroly = workType.toLowerCase() === "troly";
   const rates = serviceRates[workType];
   const computedAmount = rates
     ? durationHours * (rates.perHour ?? 0) +
@@ -892,78 +903,98 @@ export default function NewTransaction({
         </select>
       </div>
 
-      {/* Duration */}
-      <div>
-        <p className={labelClass}>{t.duration}</p>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <p className="text-xs text-muted-foreground mb-1">{t.hours}</p>
-            <input
-              type="number"
-              min="0"
-              value={durationHours}
-              onChange={(e) =>
-                setDurationHours(Math.max(0, Number(e.target.value)))
-              }
-              className={inputClass}
-              data-ocid="new_transaction.hours.input"
-            />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs text-muted-foreground mb-1">{t.minutes}</p>
-            <input
-              type="number"
-              min="0"
-              max="59"
-              value={durationMinutes}
-              onChange={(e) =>
-                setDurationMinutes(
-                  Math.min(59, Math.max(0, Number(e.target.value))),
-                )
-              }
-              className={inputClass}
-              data-ocid="new_transaction.minutes.input"
-            />
+      {/* Duration - hidden for Troly */}
+      {!isTroly && (
+        <div>
+          <p className={labelClass}>{t.duration}</p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground mb-1">{t.hours}</p>
+              <input
+                type="number"
+                min="0"
+                value={durationHours}
+                onChange={(e) =>
+                  setDurationHours(Math.max(0, Number(e.target.value)))
+                }
+                className={inputClass}
+                data-ocid="new_transaction.hours.input"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground mb-1">{t.minutes}</p>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={durationMinutes}
+                onChange={(e) =>
+                  setDurationMinutes(
+                    Math.min(59, Math.max(0, Number(e.target.value))),
+                  )
+                }
+                className={inputClass}
+                data-ocid="new_transaction.minutes.input"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Computed Amount */}
-      <div
-        className={`rounded-xl px-4 py-3 flex items-center gap-3 ${
-          hasRate
-            ? "bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700"
-            : "bg-muted border border-border"
-        }`}
-        data-ocid="new_transaction.calc_amount.panel"
-      >
-        <Calculator
-          size={18}
-          className={hasRate ? "text-green-700" : "text-muted-foreground"}
-        />
-        {hasRate ? (
-          <div className="flex items-center justify-between flex-1">
-            <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-              {t.calcAmount}
-            </span>
-            <span className="text-lg font-bold text-green-800 dark:text-green-300">
-              ₹{computedAmount.toFixed(2)}
-            </span>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {rates ? "₹0" : `⚠️ ${t.rateNotSet} — ${workType}`}
-          </p>
-        )}
-      </div>
+      {/* Computed Amount - hidden for Troly */}
+      {!isTroly && (
+        <div
+          className={`rounded-xl px-4 py-3 flex items-center gap-3 ${
+            hasRate
+              ? "bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700"
+              : "bg-muted border border-border"
+          }`}
+          data-ocid="new_transaction.calc_amount.panel"
+        >
+          <Calculator
+            size={18}
+            className={hasRate ? "text-green-700" : "text-muted-foreground"}
+          />
+          {hasRate ? (
+            <div className="flex items-center justify-between flex-1">
+              <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                {t.calcAmount}
+              </span>
+              <span className="text-lg font-bold text-green-800 dark:text-green-300">
+                ₹{computedAmount.toFixed(2)}
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {rates ? "₹0" : `⚠️ ${t.rateNotSet} — ${workType}`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Troly note */}
+      {isTroly && (
+        <div className="rounded-xl px-4 py-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-700 text-sm text-orange-700 dark:text-orange-300 font-medium">
+          Troly: {language === "gu" ? "રકમ જાતે નાખો" : "manually enter amount"}
+        </div>
+      )}
 
       {/* Manual Amount */}
       <div>
         <p className={labelClass}>
-          {t.amount}{" "}
-          <span className="text-muted-foreground font-normal text-xs">
-            ({language === "gu" ? "ઓવરરાઇડ કરો" : "override calculated"})
-          </span>
+          {isTroly ? (
+            <>
+              {language === "gu" ? "રકમ (₹)" : "Amount (₹)"}{" "}
+              <span className="text-red-500">*</span>
+            </>
+          ) : (
+            <>
+              {t.amount}{" "}
+              <span className="text-muted-foreground font-normal text-xs">
+                ({language === "gu" ? "ઓવરરાઇડ કરો" : "override calculated"})
+              </span>
+            </>
+          )}
         </p>
         <input
           type="number"
@@ -971,7 +1002,9 @@ export default function NewTransaction({
           className={inputClass}
           value={manualAmount}
           onChange={(e) => setManualAmount(e.target.value)}
-          placeholder={hasRate ? String(computedAmount.toFixed(2)) : "0"}
+          placeholder={
+            isTroly ? "0" : hasRate ? String(computedAmount.toFixed(2)) : "0"
+          }
           data-ocid="new_transaction.amount.input"
         />
       </div>

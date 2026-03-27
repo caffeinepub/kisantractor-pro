@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { MaintenanceReminder, Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 interface PaymentReminder {
   id: string;
@@ -133,8 +134,10 @@ export default function Notifications() {
   );
   const [maintenanceReminders, setMaintenanceReminders] = useState<
     MaintenanceReminder[]
-  >([]);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
+  >(() => getCache<MaintenanceReminder>("reminders").filter((r) => !r.isDone));
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
   const [tab, setTab] = useState<"payment" | "maintenance" | "events">(
     "payment",
   );
@@ -155,6 +158,8 @@ export default function Notifications() {
       actor.getAllMaintenanceReminders(),
       actor.getAllTractors(),
     ]);
+    setCache("reminders", rem);
+    setCache("tractors", tr);
     setMaintenanceReminders(rem.filter((r) => !r.isDone));
     setTractors(tr);
   }, [actor]);

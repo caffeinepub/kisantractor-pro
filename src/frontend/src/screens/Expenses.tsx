@@ -4,6 +4,7 @@ import type { Expense, Tractor } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { translations } from "../i18n";
 import { useAppStore } from "../store";
+import { getCache, setCache } from "../utils/dataCache";
 
 function parseExpenseDescription(raw: string): {
   mode: "cash" | "upi" | null;
@@ -22,9 +23,15 @@ export default function Expenses() {
   const { actor } = useActor();
   const { language } = useAppStore();
   const t = translations[language];
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [tractors, setTractors] = useState<Tractor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState<Expense[]>(() =>
+    getCache<Expense>("expenses"),
+  );
+  const [tractors, setTractors] = useState<Tractor[]>(() =>
+    getCache<Tractor>("tractors"),
+  );
+  const [loading, setLoading] = useState(
+    () => getCache<Expense>("expenses").length === 0,
+  );
   const [showForm, setShowForm] = useState(false);
   const [netProfit, setNetProfit] = useState(0);
   const now = new Date();
@@ -45,6 +52,8 @@ export default function Expenses() {
       actor.getAllTractors(),
       actor.getNetProfit(BigInt(now.getMonth() + 1), BigInt(now.getFullYear())),
     ]);
+    setCache("expenses", exp);
+    setCache("tractors", tr);
     setExpenses(exp);
     setTractors(tr);
     setNetProfit(profit);
