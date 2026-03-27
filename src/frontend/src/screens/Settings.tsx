@@ -20,6 +20,8 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
     setDarkMode,
     ownerPassword,
     setOwnerPassword,
+    ownerMobile,
+    setOwnerMobile,
     driverRequests,
     updateDriverRequest,
     setAuthRole,
@@ -32,6 +34,8 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
   const [saving, setSaving] = useState(false);
   const [newPwd, setNewPwd] = useState("");
   const [pwdSaved, setPwdSaved] = useState(false);
+  const [newMobile, setNewMobile] = useState("");
+  const [mobileSaved, setMobileSaved] = useState(false);
   const [drivers, setDrivers] = useState<
     Array<{ id: bigint; name: string; phone: string }>
   >([]);
@@ -70,6 +74,14 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
       console.error(e);
     }
     setSaving(false);
+  };
+
+  const handleSaveMobile = () => {
+    if (!newMobile.trim()) return;
+    setOwnerMobile(newMobile.trim());
+    setNewMobile("");
+    setMobileSaved(true);
+    setTimeout(() => setMobileSaved(false), 2000);
   };
 
   const handleSavePassword = () => {
@@ -122,6 +134,11 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
     if (status === "approved") return t.approve;
     if (status === "rejected") return t.reject;
     return t.pendingApproval;
+  };
+
+  const maskedMobile = (num: string) => {
+    if (num.length < 4) return num;
+    return `${num.slice(0, 2)}****${num.slice(-2)}`;
   };
 
   const inputClass =
@@ -321,6 +338,47 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
             {t.add}
           </button>
         </div>
+      </div>
+
+      {/* Owner Mobile Number */}
+      <div className="bg-white dark:bg-gray-700 rounded-xl shadow p-4 space-y-3">
+        <h2 className="font-bold text-gray-800 dark:text-white">
+          {t.ownerMobile}
+        </h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          {language === "gu" ? "હાલનો નંબર: " : "Current number: "}
+          <span className="font-mono tracking-widest">
+            {ownerMobile
+              ? maskedMobile(ownerMobile)
+              : language === "gu"
+                ? "સેટ નથી"
+                : "Not set"}
+          </span>
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="tel"
+            value={newMobile}
+            onChange={(e) => setNewMobile(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSaveMobile()}
+            placeholder={t.enterMobile}
+            data-ocid="settings.mobile.input"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={handleSaveMobile}
+            data-ocid="settings.mobile.save_button"
+            className="px-5 py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white font-bold text-sm transition-colors"
+          >
+            {t.save}
+          </button>
+        </div>
+        {mobileSaved && (
+          <p className="text-green-600 dark:text-green-400 text-sm font-semibold">
+            ✅ {t.mobileSaved}
+          </p>
+        )}
       </div>
 
       {/* Owner Password */}

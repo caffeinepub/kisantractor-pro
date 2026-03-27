@@ -22,14 +22,11 @@ import BookingDetail from "./screens/BookingDetail";
 import Bookings from "./screens/Bookings";
 import Credits from "./screens/Credits";
 import Dashboard from "./screens/Dashboard";
-import DriverView from "./screens/DriverView";
 import Drivers from "./screens/Drivers";
 import Expenses from "./screens/Expenses";
 import Invoice from "./screens/Invoice";
-import LoginScreen from "./screens/LoginScreen";
 import NewBooking from "./screens/NewBooking";
 import NewTransaction from "./screens/NewTransaction";
-import OwnerLoginScreen from "./screens/OwnerLoginScreen";
 import Parties from "./screens/Parties";
 import PartyDetail from "./screens/PartyDetail";
 import PaymentIn from "./screens/PaymentIn";
@@ -56,8 +53,6 @@ export type Screen =
   | "transactions"
   | "newTransaction"
   | "paymentIn";
-
-type AuthScreen = "login" | "ownerLogin";
 
 const drawerNavItems = [
   {
@@ -122,11 +117,10 @@ const mainScreens: Screen[] = [
 ];
 
 export default function App() {
-  const { language, darkMode, authRole } = useAppStore();
+  const { language, darkMode } = useAppStore();
   useSettingsSync();
-  const t = translations[language];
+  const _t = translations[language];
   const [screen, setScreen] = useState<Screen>("dashboard");
-  const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [invoiceBooking, setInvoiceBooking] = useState<Booking | null>(null);
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
@@ -145,38 +139,9 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Auth gate
-  if (authRole === null) {
-    if (authScreen === "ownerLogin") {
-      return (
-        <ErrorBoundary>
-          <div className={darkMode ? "dark" : ""}>
-            <OwnerLoginScreen
-              onSuccess={() => setAuthScreen("login")}
-              onBack={() => setAuthScreen("login")}
-            />
-          </div>
-        </ErrorBoundary>
-      );
-    }
-    return (
-      <ErrorBoundary>
-        <div className={darkMode ? "dark" : ""}>
-          <LoginScreen onOwnerLogin={() => setAuthScreen("ownerLogin")} />
-        </div>
-      </ErrorBoundary>
-    );
-  }
-
-  if (authRole === "driver") {
-    return (
-      <ErrorBoundary>
-        <div className={darkMode ? "dark" : ""}>
-          <DriverView />
-        </div>
-      </ErrorBoundary>
-    );
-  }
+  const saveBusinessName = (name: string) => {
+    localStorage.setItem("businessName", name);
+  };
 
   const openBookingDetail = (booking: Booking) => {
     setSelectedBooking(booking);
@@ -199,29 +164,6 @@ export default function App() {
   };
 
   const showActionBar = mainScreens.includes(screen);
-
-  const _getScreenTitle = () => {
-    switch (screen) {
-      case "dashboard":
-        return t.appName;
-      case "transactions":
-        return t.transactions;
-      case "parties":
-        return t.parties;
-      case "tractors":
-        return t.tractors;
-      case "expenses":
-        return t.expenses;
-      case "reports":
-        return t.reports;
-      case "credits":
-        return t.credits;
-      case "settings":
-        return t.settings;
-      default:
-        return t.appName;
-    }
-  };
 
   return (
     <ErrorBoundary>
@@ -250,7 +192,6 @@ export default function App() {
                 <p className="text-primary-foreground font-bold text-lg leading-tight">
                   🚜 KisanTractor
                 </p>
-                <p className="text-primary-foreground/80 text-xs">Pro</p>
               </div>
               <button
                 type="button"
@@ -314,7 +255,7 @@ export default function App() {
                         const trimmed = nameInput.trim() || "KisanTractor Pro";
                         setBusinessName(trimmed);
                         setNameInput(trimmed);
-                        localStorage.setItem("businessName", trimmed);
+                        saveBusinessName(trimmed);
                         setEditingName(false);
                       }
                       if (e.key === "Escape") {
@@ -330,7 +271,7 @@ export default function App() {
                       const trimmed = nameInput.trim() || "KisanTractor Pro";
                       setBusinessName(trimmed);
                       setNameInput(trimmed);
-                      localStorage.setItem("businessName", trimmed);
+                      saveBusinessName(trimmed);
                       setEditingName(false);
                     }}
                     className="p-1 rounded text-primary"

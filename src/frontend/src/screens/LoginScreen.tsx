@@ -4,11 +4,13 @@ import { useAppStore } from "../store";
 
 interface Props {
   onOwnerLogin: () => void;
+  onRegister: () => void;
 }
 
-export default function LoginScreen({ onOwnerLogin }: Props) {
+export default function LoginScreen({ onOwnerLogin, onRegister }: Props) {
   const { language } = useAppStore();
   const t = translations[language];
+  const isGu = language === "gu";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-green-50 to-green-100 dark:from-gray-900 dark:to-gray-800 px-6">
@@ -23,7 +25,9 @@ export default function LoginScreen({ onOwnerLogin }: Props) {
           {t.appName}
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-2 text-base text-center">
-          કિસાન ટ્રેક્ટર સર્વિસ મેનેજમેન્ટ
+          {isGu
+            ? "કિસાન ટ્રેક્ટર સર્વિસ મેનેજમેન્ટ"
+            : "Kisan Tractor Service Management"}
         </p>
       </motion.div>
 
@@ -31,7 +35,7 @@ export default function LoginScreen({ onOwnerLogin }: Props) {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
-        className="w-full max-w-sm"
+        className="w-full max-w-sm space-y-3"
       >
         <button
           type="button"
@@ -42,9 +46,24 @@ export default function LoginScreen({ onOwnerLogin }: Props) {
           <span className="text-2xl">👑</span>
           {t.ownerLogin}
         </button>
+
+        <button
+          type="button"
+          onClick={onRegister}
+          data-ocid="login.register.button"
+          className="w-full py-4 rounded-2xl border-2 border-green-700 text-green-700 dark:text-green-300 dark:border-green-500 text-lg font-bold flex items-center justify-center gap-3 transition-colors hover:bg-green-50 dark:hover:bg-green-900/20"
+        >
+          <span className="text-xl">➕</span>
+          {isGu ? "નવું એકાઉન્ટ બનાવો" : "Create New Account"}
+        </button>
       </motion.div>
 
-      <p className="mt-12 text-xs text-gray-400 dark:text-gray-600 text-center">
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.4 }}
+        className="mt-12 text-xs text-gray-400 dark:text-gray-600 text-center"
+      >
         © {new Date().getFullYear()}. Built with love using{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
@@ -54,7 +73,7 @@ export default function LoginScreen({ onOwnerLogin }: Props) {
         >
           caffeine.ai
         </a>
-      </p>
+      </motion.p>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { translations } from "../i18n";
-import { useAppStore } from "../store";
+import { loginOwner, useAppStore } from "../store";
 
 interface Props {
   onSuccess: () => void;
@@ -9,19 +9,33 @@ interface Props {
 }
 
 export default function OwnerLoginScreen({ onSuccess, onBack }: Props) {
-  const { language, ownerPassword, setAuthRole } = useAppStore();
+  const { language, setAuthRole, setCurrentOwnerMobile } = useAppStore();
   const t = translations[language];
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [error, setError] = useState(false);
+  const [mobileError, setMobileError] = useState(false);
+  const [pwdError, setPwdError] = useState(false);
 
   const handleSubmit = () => {
-    if (password === ownerPassword) {
-      setAuthRole("owner");
-      onSuccess();
-    } else {
-      setError(true);
+    setMobileError(false);
+    setPwdError(false);
+
+    const trimmedMobile = mobile.trim();
+    if (!trimmedMobile) {
+      setMobileError(true);
+      return;
     }
+
+    const valid = loginOwner(trimmedMobile, password);
+    if (!valid) {
+      setPwdError(true);
+      return;
+    }
+
+    setCurrentOwnerMobile(trimmedMobile);
+    setAuthRole("owner");
+    onSuccess();
   };
 
   return (
@@ -39,41 +53,74 @@ export default function OwnerLoginScreen({ onSuccess, onBack }: Props) {
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
         <span className="text-6xl mb-4">👑</span>
-        <h1 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-8">
+        <h1 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-2">
           {t.ownerLogin}
         </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 text-center">
+          {language === "gu"
+            ? "તમારો મોબાઇલ નંબર અને પાસવર્ડ દાખલ કરો"
+            : "Enter your mobile number and password"}
+        </p>
 
         <div className="w-full max-w-sm space-y-4">
-          <div className="relative">
+          <div>
             <input
-              type={showPwd ? "text" : "password"}
-              value={password}
+              type="tel"
+              value={mobile}
               onChange={(e) => {
-                setPassword(e.target.value);
-                setError(false);
+                setMobile(e.target.value);
+                setMobileError(false);
+                setPwdError(false);
               }}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              placeholder={t.enterPassword}
-              data-ocid="owner_login.input"
-              className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
+              placeholder={t.enterMobile}
+              data-ocid="owner_login.mobile_input"
+              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
             />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
-            >
-              {showPwd ? <EyeOff size={22} /> : <Eye size={22} />}
-            </button>
+            {mobileError && (
+              <p
+                data-ocid="owner_login.mobile_error_state"
+                className="text-red-600 dark:text-red-400 text-base font-semibold text-center mt-2"
+              >
+                ❌ {t.wrongMobile}
+              </p>
+            )}
           </div>
 
-          {error && (
-            <p
-              data-ocid="owner_login.error_state"
-              className="text-red-600 dark:text-red-400 text-base font-semibold text-center"
-            >
-              ❌ {t.wrongPassword}
-            </p>
-          )}
+          <div>
+            <div className="relative">
+              <input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPwdError(false);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                placeholder={t.enterPassword}
+                data-ocid="owner_login.input"
+                className="w-full px-5 py-4 pr-14 rounded-2xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg focus:outline-none focus:border-green-600 dark:focus:border-green-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+              >
+                {showPwd ? <EyeOff size={22} /> : <Eye size={22} />}
+              </button>
+            </div>
+            {pwdError && (
+              <p
+                data-ocid="owner_login.error_state"
+                className="text-red-600 dark:text-red-400 text-base font-semibold text-center mt-2"
+              >
+                ❌{" "}
+                {language === "gu"
+                  ? "ખોટો મોબાઇલ નંબર અથવા પાસવર્ડ"
+                  : "Wrong mobile number or password"}
+              </p>
+            )}
+          </div>
 
           <button
             type="button"

@@ -171,6 +171,11 @@ export const translations = {
     bakiAmount: "બાકી",
     netPayment: "ચોખ્ખી ચૂકવણી",
     paymentAmount: "ચૂકવણી રકમ",
+    ownerMobile: "માલિક મોબાઇલ નંબર",
+    enterMobile: "મોબાઇલ નંબર દાખલ કરો",
+    wrongMobile: "ખોટો મોબાઇલ નંબર",
+    mobileNotSet: "પહેલાં Settings માં મોબાઇલ નંબર સેટ કરો",
+    mobileSaved: "મોબાઇલ નંબર સાચવ્યો!",
   },
   en: {
     appName: "Kisan Tractor Service",
@@ -344,6 +349,11 @@ export const translations = {
     bakiAmount: "Balance (Baki)",
     netPayment: "Net Payment",
     paymentAmount: "Payment Amount",
+    ownerMobile: "Owner Mobile Number",
+    enterMobile: "Enter Mobile Number",
+    wrongMobile: "Wrong Mobile Number",
+    mobileNotSet: "Please set mobile number in Settings first",
+    mobileSaved: "Mobile number saved!",
   },
 };
 
