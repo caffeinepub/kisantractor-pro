@@ -16,7 +16,7 @@ import { useAppStore } from "../store";
 interface Props {
   onBack: () => void;
   onNavigate: (screen: string) => void;
-  onShowPinSetup: () => void;
+  onShowPinSetup: (onSaved?: () => void) => void;
 }
 
 export default function SettingsScreen({
@@ -91,8 +91,9 @@ export default function SettingsScreen({
 
   // PIN management
   const handleEnablePin = () => {
-    onShowPinSetup();
-    setPinEnabled(true);
+    onShowPinSetup(() => {
+      setPinEnabled(true);
+    });
   };
 
   const handleDisablePin = () => {

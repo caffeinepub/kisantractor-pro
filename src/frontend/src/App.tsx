@@ -17,7 +17,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Booking, MaintenanceReminder, Party } from "./backend.d";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import PinLock from "./components/PinLock";
@@ -187,6 +187,7 @@ export default function App() {
     () => !localStorage.getItem("kisanPin"),
   );
   const [showPinSetup, setShowPinSetup] = useState(false);
+  const pinSavedCallbackRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (darkMode) {
@@ -351,6 +352,10 @@ export default function App() {
         onSetup={(pin) => {
           localStorage.setItem("kisanPin", pin);
           setShowPinSetup(false);
+          if (pinSavedCallbackRef.current) {
+            pinSavedCallbackRef.current();
+            pinSavedCallbackRef.current = null;
+          }
         }}
         onCancel={() => setShowPinSetup(false)}
         language={language}
@@ -662,7 +667,10 @@ export default function App() {
               <SettingsScreen
                 onBack={() => setScreen("dashboard")}
                 onNavigate={(s) => setScreen(s as Screen)}
-                onShowPinSetup={() => setShowPinSetup(true)}
+                onShowPinSetup={(onSaved) => {
+                  pinSavedCallbackRef.current = onSaved ?? null;
+                  setShowPinSetup(true);
+                }}
               />
             )}
             {screen === "serviceManagement" && (
